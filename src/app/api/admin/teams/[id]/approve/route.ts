@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requirePermission, jsonError } from "@/lib/api-auth";
-import { writeAudit } from "@/lib/audit";
 import { recordChange, snapshotRow } from "@/lib/change-history";
+import { writeAudit } from "@/lib/audit";
 import { sendEmail, approvalEmailHtml, approvalEmailText, type EmailResult } from "@/lib/email";
 import {
   generateQrToken,
@@ -53,17 +53,21 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     // preserves the registrationId, so we skip the email in that case).
     // We also confirm the payment was actually verified (status === VERIFIED),
     // which is enforced above.
-    const isFirstApproval = !team.registrationId;
-
-    // Determine the next registration sequence number
-    const existingApproved = await db.team.count({
-      where: { status: "APPROVED", registrationId: { not: null } },
-    });
-    const seq = await nextRegistrationSequence(existingApproved);
-    const regId = generateRegistrationId(seq);
 
     // Transaction-safe generation of IDs and tokens
     const result = await db.$transaction(async (tx) => {
+      // Serialize ID allocation and re-check current state after acquiring the lock.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('hackmitten-registration-sequence'))`;
+      const current = await tx.team.findUnique({ where: { id }, include: { payment: true } });
+      if (!current) throw new Error("TEAM_NOT_FOUND");
+      if (current.status === "APPROVED") throw new Error("TEAM_ALREADY_APPROVED");
+      if (current.payment?.status !== "VERIFIED") throw new Error("PAYMENT_NOT_VERIFIED");
+      const allocatedIds = await tx.team.findMany({
+        where: { registrationId: { not: null } },
+        select: { registrationId: true },
+      });
+      const seq = nextRegistrationSequence(allocatedIds.map((row) => row.registrationId));
+      const regId = generateRegistrationId(seq);
       const updatedTeam = await tx.team.update({
         where: { id },
         data: { status: "APPROVED", registrationId: regId },
@@ -86,26 +90,29 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         });
       }
 
-      return updatedTeam;
-    });
+      await tx.auditLog.create({
+        data: {
+          userId: ctx.userId,
+          teamId: id,
+          action: "TEAM_APPROVED",
+          detail: `Registration ID ${regId}; ${members.length} participants${current.registrationId ? " (re-approval; no email sent)" : ""}`,
+        },
+      });
+      await tx.changeHistory.create({
+        data: {
+          section: "TEAM",
+          entityId: id,
+          entityType: "Team",
+          action: "APPROVE",
+          previousState: JSON.stringify(previousSnapshot),
+          newState: JSON.stringify(snapshotRow(updatedTeam)),
+          changedById: ctx.userId,
+        },
+      });
 
-    // Record change history — enables rollback to previous state (PAYMENT_VERIFIED)
-    await recordChange({
-      section: "TEAM",
-      entityId: id,
-      entityType: "Team",
-      action: "APPROVE",
-      previousState: previousSnapshot,
-      newState: snapshotRow(result),
-      changedById: ctx.userId,
+      return { team: updatedTeam, registrationId: regId, firstApproval: !current.registrationId };
     });
-
-    await writeAudit({
-      userId: ctx.userId,
-      teamId: id,
-      action: "TEAM_APPROVED",
-      detail: `Registration ID ${regId} · ${team.members.length} participants${isFirstApproval ? "" : " (re-approval — no email sent)"}`,
-    });
+    const regId = result.registrationId;
 
     // Send one approval email to the leader — ONLY on the first approval.
     // Re-approvals after a revert (registrationId already existed) skip the email
@@ -115,16 +122,19 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       include: { members: true, payment: true },
     });
 
-    if (isFirstApproval) {
+    if (result.firstApproval) {
       // Wait for the provider attempt, but do not roll back committed approval
       // state when delivery is unavailable or rejected.
-      const baseUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+      const baseUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, "") || "";
       const leader = refreshed?.members.find((member) => member.isLeader);
       let emailResult: EmailResult = { success: false, message: "Leader email or pass is missing", provider: "configuration" };
-      if (!leader?.email || !leader.qrToken) {
-        console.error("[approval-email] delivery skipped", { teamId: id, reason: emailResult.message });
+      if (!leader?.email || !leader.qrToken || !baseUrl) {
+        console.error("[approval-email] delivery skipped", {
+          teamId: id,
+          reason: !baseUrl ? "NEXTAUTH_URL is missing" : "Leader email or pass is missing",
+        });
       } else {
-        const passUrl = baseUrl ? `${baseUrl}/pass/${leader.qrToken}` : `/pass/${leader.qrToken}`;
+        const passUrl = `${baseUrl}/pass/${leader.qrToken}`;
         emailResult = await sendEmail({
           to: leader.email,
           subject: "Hackmitten 3.0 — Team Approved",
@@ -149,17 +159,22 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
           console.error("[approval-email] delivery failed", {
             teamId: id,
             provider: emailResult.provider,
-            message: emailResult.message,
           });
         }
       }
-      return NextResponse.json({ team: refreshed, email: emailResult });
+      return NextResponse.json({ team: refreshed, emailSent: emailResult.success });
     } else {
       console.log("[approval-email] duplicate suppressed", { teamId: id, reason: "re-approval" });
     }
 
     return NextResponse.json({ team: refreshed });
   } catch (err) {
+    if (err instanceof Error && err.message === "TEAM_ALREADY_APPROVED") {
+      return NextResponse.json({ error: "Already approved" }, { status: 409 });
+    }
+    if (err instanceof Error && err.message === "PAYMENT_NOT_VERIFIED") {
+      return NextResponse.json({ error: "Cannot approve team: payment is not verified" }, { status: 400 });
+    }
     return jsonError(err);
   }
 }

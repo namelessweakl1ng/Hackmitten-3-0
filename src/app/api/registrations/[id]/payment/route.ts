@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { paymentSubmissionSchema } from "@/lib/validators";
 import { jsonError } from "@/lib/api-auth";
+import { attemptRegistrationAcknowledgement } from "@/lib/registration-acknowledgement";
 
 /**
  * POST /api/registrations/:id/payment
@@ -53,7 +54,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       data: { status: "PAYMENT_PENDING" },
     });
 
-    return NextResponse.json({ payment });
+    const acknowledgementEmailSent = await attemptRegistrationAcknowledgement(team.id);
+    return NextResponse.json({ payment, acknowledgementEmailSent });
   } catch (err) {
     return jsonError(err);
   }

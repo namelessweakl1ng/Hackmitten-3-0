@@ -10,7 +10,7 @@ export const memberSchema = z.object({
     .string()
     .regex(/^[6-9][0-9]{9}$/, "Phone must be a valid 10-digit Indian mobile number"),
   college: z.string().min(2, "College name required").max(150),
-  degree: z.string().max(60).optional().or(z.literal("")),
+  degree: z.string().trim().min(1, "Degree is required").max(60),
 });
 
 export const registrationSchema = z
@@ -58,7 +58,7 @@ export const rejectionSchema = z.object({
 });
 
 export const foodCheckInSchema = z.object({
-  qrToken: z.string().min(8, "Invalid QR token").max(80),
+  qrToken: z.string().regex(/^[a-f0-9]{48}$/i, "Invalid QR token"),
   mealId: z.string().min(1),
 });
 

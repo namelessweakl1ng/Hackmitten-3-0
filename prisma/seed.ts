@@ -14,7 +14,7 @@
  *
  * Required env vars:
  *   ADMIN_USERNAME, ADMIN_EMAIL, ADMIN_PASSWORD
- *   HM3_BERSERK_SECRET (if missing, one is generated and printed ONCE with a warning)
+ *   HM3_BERSERK_SECRET
  *
  * Optional env vars:
  *   COORDINATOR_USERNAME, COORDINATOR_PASSWORD, COORDINATOR_EMAIL
@@ -24,7 +24,6 @@
  */
 import { PrismaClient, MealType } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { generateBerserkSecret } from "../src/lib/constants";
 import { ensureSingletonEventConfig } from "../src/lib/bootstrap";
 import { ensureOperationalUser, readCredentialGroup } from "../src/lib/operational-users";
 
@@ -34,16 +33,11 @@ function required(name: string): string {
   const v = process.env[name];
   if (!v || v.trim() === "") {
     console.error(`\n[FATAL] Missing required environment variable: ${name}`);
-    console.error("Set it in your environment (e.g. .env, Vercel project settings, or your secret manager).");
+    console.error("Set it in your environment file or secret manager before running bootstrap.");
     console.error("The production bootstrap seed will not run with default credentials.\n");
     process.exit(1);
   }
   return v.trim();
-}
-
-function optional(name: string): string | undefined {
-  const v = process.env[name];
-  return v && v.trim() !== "" ? v.trim() : undefined;
 }
 
 async function main() {
@@ -54,11 +48,7 @@ async function main() {
   const adminEmail = required("ADMIN_EMAIL");
   const adminPassword = required("ADMIN_PASSWORD");
 
-  let berserkSecret = optional("HM3_BERSERK_SECRET");
-  if (!berserkSecret) {
-    berserkSecret = generateBerserkSecret(48);
-    console.warn("HM3_BERSERK_SECRET not set; a recovery secret was generated for this run and was not persisted.");
-  }
+  const berserkSecret = required("HM3_BERSERK_SECRET");
 
   const berserkHash = await bcrypt.hash(berserkSecret, 12);
 

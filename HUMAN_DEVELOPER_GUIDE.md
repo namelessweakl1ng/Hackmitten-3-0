@@ -1,406 +1,136 @@
-# HACKMITTEN 3.0 — Human Developer Guide
+# Human developer and operations guide
 
-A practical engineering reference for the Hackmitten 3.0 hackathon platform.
-Read this once before touching code or deploying.
+## System map
 
----
+### Public surface
+- `/`: cinematic event site, static/source-controlled decorative content plus database event configuration and managed gallery/sponsor/winner/coordinator content.
+- `/register`: public registration and payment submission.
+- `/pass/[qrToken]`: public participant pass.
+- Public APIs serve event configuration/state, visible content, registration creation, team-name availability, pass lookup, and public uploaded assets.
 
-## 1. What Hackmitten is
+### Authentication and roles
+- NextAuth credentials login checks bcrypt hashes and a selected login role against the database role. Sessions are signed JWTs with a seven-day lifetime; the JWT carries user ID and role.
+- Roles are SUPER_ADMIN, COORDINATOR, FOOD_ADMIN, PARTICIPANT.
+- Mutating and sensitive APIs call `requirePermission`; the permission matrix lives in `src/lib/permissions.ts`.
+- Keep `NEXTAUTH_SECRET` private and set `NEXTAUTH_URL` to the canonical HTTPS origin. The reverse proxy should pass the expected host and protocol; the application does not enable arbitrary host trust.
 
-Hackmitten is a 24-hour national-level hackathon run by Maharaja Institute of
-Technology Thandavapura. The platform powers:
+### Database
+PostgreSQL is the only supported database. Prisma schema is `prisma/schema.prisma`; immutable committed migrations are under `prisma/migrations`. Core tables cover users, event configuration, phases, teams, participants, payments/screenshots, meals/check-ins, public managed content, audit logs, and change history. The team name and participant QR/participant identifiers have unique constraints. Food check-ins have a unique (participant, meal) constraint.
 
-- A cinematic public landing page (3D black-hole scene, real-time countdown,
-  configurable hero / about / timeline / gallery / coordinators / sponsors /
-  winners / CTA sections).
-- A multi-step team registration flow with team leader, college, members,
-  UPI payment screenshot upload.
-- A super-admin dashboard for verifying payments, approving teams, managing
-  event config, meals, sponsors, coordinators, winners, gallery, audit log,
-  users, and change history (with rollback).
-- A coordinator dashboard (read-only operational view).
-- A mobile-first food-admin scanner that reads participant QR codes and
-  records meal check-ins with duplicate prevention at the database layer.
-- A public digital pass page at `/pass/[qrToken]` with PNG download for
-  printing.
+`EventConfig` uses the fixed ID `singleton`; bootstrap creates it only when absent and preserves existing operator-managed values. Registration capacity is enforced under a transaction-scoped PostgreSQL advisory lock. Food duplicate prevention is enforced by the database constraint.
 
----
+### Registration and payment
+Server-side Zod validation requires 3–4 members, college and degree, valid member data, and unique email addresses within a team. The server assigns the first member as leader and ignores client leader flags. Team names are normalized and checked transactionally. Payment is a separate state transition; approval creates registration/participant identifiers and opaque QR tokens. Acknowledgement/approval email failures do not roll back the database mutation.
 
-## 2. Architecture
+### Storage
+New public files are written to `HM3_PUBLIC_UPLOAD_DIR`; new payment screenshots go to `HM3_PRIVATE_UPLOAD_DIR`. If unset, both directories are under `storage/` relative to the runtime working directory. The public upload route only accepts generated, constrained filenames. Private screenshots are outside the public route and are streamed from the authorized admin payment endpoint with no-store headers.
 
-```
-                Public (SSR + client)
-                         │
-                    Next.js 16 (App Router)
-                         │
-              ┌──────────┴──────────┐
-              │                     │
-     React Three Fiber         TanStack Query
-     Three.js / Drei           Zustand (registration form)
-     Lenis (smooth scroll)
-              │                     │
-              └──────────┬──────────┘
-                         │
-                  Next.js Route Handlers (api/)
-                         │
-              NextAuth (JWT sessions, bcrypt, BERSERK 2FA)
-                         │
-                    Prisma ORM
-                         │
-                  PostgreSQL (Neon)
-                         │
-        Files: Vercel Blob (prod) → /public/uploads/ (dev fallback)
-```
+Mount both paths on persistent storage outside a release directory. Back them up with PostgreSQL. Restrict private directory access to the service account and backup operators. Before upgrading, copy legacy `public/uploads` contents into the new public upload directory and `.private-uploads` contents into the private upload directory. The old `.private-uploads/` local path is also read as a compatibility fallback. Existing Supabase-backed screenshot rows can still be read if legacy Supabase credentials are configured; new uploads never use that provider. Migrate legacy files before removing that compatibility. Standalone packaging deliberately excludes `public/uploads` so runtime uploads cannot leak into a release artifact.
 
-| Layer              | Technology                                                   |
-|--------------------|--------------------------------------------------------------|
-| Framework          | Next.js 16 (App Router, Turbopack)                           |
-| Language           | TypeScript 5                                                 |
-| Styling            | Tailwind CSS 4 + shadcn/ui (New York)                        |
-| 3D / animation     | React Three Fiber, Three.js, Drei, @react-three/postprocessing |
-| Smooth scroll      | Lenis                                                        |
-| Database           | PostgreSQL (Neon / Vercel Postgres / self-hosted) + Prisma 6 |
-| Auth               | NextAuth.js v4 — credentials provider, JWT, bcrypt(12)        |
-| File storage       | @vercel/blob in production, local filesystem in development   |
-| QR pass           | qrcode.react (render), html5-qrcode (scanner)                |
-| State (client)     | Zustand (form), TanStack Query (server data)                  |
-| Validation         | Zod (client + server)                                         |
-| Tests              | `bun test` (Bun's built-in test runner)                      |
+Upload validation allows JPEG, PNG, WebP, and GIF up to 8 MiB, requires recognized magic bytes matching the declared MIME, and uses server-generated filenames.
 
----
+### Email
+Production email uses Resend via `RESEND_API_KEY` and `EMAIL_FROM`. Keep credentials server-side. Templates escape interpolated HTML and include text alternatives. Missing provider configuration/failure does not undo committed registration or approval. A failed registration acknowledgement releases its idempotency claim; a later payment submission retries it. Successful delivery is recorded separately. A stale in-progress claim can be retried after its lease expires.
 
-## 3. Directory structure
+## Environment variables
 
-```
-prisma/
-  schema.prisma              PostgreSQL schema (14 models)
-  migrations/                Prisma migration history (committed)
-  seed.ts                    Production bootstrap (admin + config + meals)
-  seed-demo.ts               Development-only demo data (refuses to run in prod)
-src/
-  app/
-    page.tsx                 Public landing page (client component)
-    layout.tsx               Root layout (SessionProvider + QueryProvider)
-    register/                5-step team registration
-    login/                   Role-aware login
-    pass/[qrToken]/         Public digital pass + PNG download
-    admin/                  Super admin / coordinator dashboard pages
-    coordinator/            Coordinator dashboard
-    food-admin/             Mobile QR scanner
-    api/                    ~30 route handlers (auth, public, admin, food)
-  components/
-    three/space-scene.tsx   Black-hole 3D scene — DO NOT MODIFY
-    sections/                Public landing sections
-    register/               Multi-step store + steps
-    admin/                  Admin managers (one per resource)
-    coordinator/            Coordinator portal
-    public/                 Public nav
-    auth/                   Session/query providers
-    ui/                     shadcn/ui components
-  lib/
-    auth.ts                 NextAuth config — requires NEXTAUTH_SECRET
-    db.ts                   Prisma client singleton
-    api-auth.ts             requireSession / requirePermission helpers
-    permissions.ts          Role × permission matrix
-    validators.ts           Zod schemas
-    upload.ts               Vercel Blob / local upload with MIME sniff
-    constants.ts            Strong password / BERSERK / QR token generators
-    audit.ts                Audit log writer
-    change-history.ts       Change history + rollback helpers
-    event-state.ts          Event lifecycle (UPCOMING / REGISTRATION_OPEN / LIVE / ENDED)
-    email.ts                Optional email (console fallback in dev)
-tests/                      Bun test suite (validators, permissions, event-state, food-checkin)
+| Variable | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | Runtime and Prisma commands | PostgreSQL connection used by Prisma |
+| `DIRECT_URL` | Prisma schema | Direct PostgreSQL URL for migration operations |
+| `NEXTAUTH_URL` | Runtime | Canonical HTTPS application origin and absolute approval-pass links |
+| `NEXTAUTH_SECRET` | Runtime | JWT/session signing secret |
+| `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Bootstrap only | Initial super-admin credentials |
+| `HM3_BERSERK_SECRET` | Bootstrap only | Recovery secret hash for credential rotation |
+| `COORDINATOR_USERNAME/EMAIL/PASSWORD` | Optional bootstrap group | Create/update coordinator operational user; set all three |
+| `FOOD_ADMIN_USERNAME/EMAIL/PASSWORD` | Optional bootstrap group | Create/update food administrator; set all three |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Optional; configure in production | Resend API access and verified sender |
+| `HM3_PUBLIC_UPLOAD_DIR` | Optional | Persistent public upload directory |
+| `HM3_PRIVATE_UPLOAD_DIR` | Optional | Persistent private payment screenshot directory |
+| `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Legacy only | Read existing screenshots stored in Supabase; new files do not use it |
+| `PORT`, `HOSTNAME` | Optional | Standalone listener; production should bind loopback behind proxy |
+
+Generate secrets with an approved secret manager or cryptographically secure generator. Never commit populated environment files.
+
+## Build and deployment
+
+Primary deployment is a standalone Node.js server supervised by systemd, with PostgreSQL and nginx/Caddy external to the application.
+
+Build on Linux using the locked Bun dependency graph:
+
+```sh
+bun install --frozen-lockfile
+bun run db:validate
+bun run build
 ```
 
----
+The build runs Prisma client generation, Next.js compilation, and standalone artifact preparation. It does not migrate or bootstrap the database. Artifact location: `.next/standalone/`; `scripts/prepare-standalone.mjs` copies `.next/static` and public static assets into it.
 
-## 4. Authentication & roles
+Copy the standalone directory to a versioned release directory. Do not copy `.env`, credentials, development databases, or runtime storage. On the server set:
 
-| Role          | Login route     | Capabilities                                              |
-|---------------|-----------------|----------------------------------------------------------|
-| SUPER_ADMIN   | `/login`        | Full access — payments, teams, config, sponsors, winners, gallery, phases, meals, users, audit, credentials |
-| COORDINATOR   | `/login`        | Dashboard, registration list (read-only), audit log     |
-| FOOD_ADMIN    | `/login`        | `/food-admin` mobile scanner, food history               |
-| PARTICIPANT   | n/a             | No admin access — only their team / pass                 |
+- `DATABASE_URL` and `DIRECT_URL`
+- `NEXTAUTH_URL` and `NEXTAUTH_SECRET`
+- `HM3_PUBLIC_UPLOAD_DIR=/var/lib/hackmitten/public`
+- `HM3_PRIVATE_UPLOAD_DIR=/var/lib/hackmitten/private`
+- Resend settings when production email is enabled
 
-Sessions are JWT-based, 7-day max age. `NEXTAUTH_SECRET` is required (no
-fallback). The login form accepts username or email (case-insensitive email,
-case-sensitive username).
+Give the service account read/execute access to the release and write access only to the two storage directories.
 
-### BERSERK recovery
+Before first startup or each release that contains migrations:
 
-The super admin can rotate their own username + password only by supplying
-the `HM3_BERSERK_SECRET` as a second factor. The secret is hashed (bcrypt 12)
-and stored in `User.recoveryHash`. It is generated at bootstrap seed time. If
-you lose it, recovery requires direct DB access to reset the hash.
-
----
-
-## 5. Database models & relationships
-
-```
-User 1───* AuditLog
-User 1───* FoodCheckIn
-User 1───* Payment           (verifiedBy)
-User 1───* ChangeHistory      (changedBy + rolledBackBy)
-User 1───1 CoordinatorProfile (optional link)
-
-Team 1───* Participant
-Team 1───1 Payment           (unique)
-Team 1───* AuditLog
-Payment 1───* PaymentScreenshot
-Participant 1───* FoodCheckIn
-Meal 1───* FoodCheckIn
-              └ unique(participantId, mealId)   ← duplicate prevention
-
-EventConfig     singleton row (id = "singleton")
-HackathonPhase  configurable timeline (8 default rows)
-CoordinatorProfile / GalleryItem / Sponsor / Winner — content tables
-ChangeHistory   full previousState / newState JSON for rollback
-```
-
-Enums: `Role`, `RegistrationStatus`, `PaymentStatus`, `MealType`,
-`CoordinatorType`, `SponsorTier`, `ChangeHistorySection`.
-
----
-
-## 6. Business rules
-
-- **Team size**: 3–4 members. Enforced on client + server (`validators.ts`).
-- **Team leader**: exactly one member must have `isLeader = true`. Enforced.
-- **Unique team name**: server-side check at `/api/registrations/check-team-name`.
-- **Unique emails within team**: enforced at submit.
-- **@gmail.com emails** + 10-digit phone (Indian mobile) required per member.
-- **Registration deadline**: server-side enforced. Returns 403 if past.
-- **Payment flow**:
-  1. Team created → `DRAFT`
-  2. Payment submitted (transactionId) → `PAYMENT_PENDING`
-  3. Screenshot uploaded → still `PAYMENT_PENDING`
-  4. Super admin verifies → `PaymentStatus.VERIFIED`, team → `PAYMENT_VERIFIED`
-  5. Super admin approves team → `APPROVED`, each participant gets a
-     `participantId` + opaque `qrToken`. Pass links can be emailed.
-- **QR / pass**:
-  - `qrToken` is a 24-byte random hex string (96 bits of entropy).
-  - QR encodes only the token — no PII in the QR itself.
-  - Pass page at `/pass/[qrToken]` resolves `token → participant → team`.
-  - PNG pass (1000×1414) is composited client-side for printing.
-- **Food check-in**:
-  - DB unique constraint `[participantId, mealId]` prevents duplicates even
-    under concurrent scans (returns `ALREADY_CHECKED_IN` 409).
-  - Scanner at `/food-admin` (camera + manual token entry).
-  - Admin can manage meals (Breakfast / Lunch / Snacks / Dinner / Custom).
-
----
-
-## 7. File storage
-
-`src/lib/upload.ts` does both:
-
-1. **Vercel Blob (production)** — when both `BLOB_READ_WRITE_TOKEN` and
-   `BLOB_STORE_ID` are set, files are uploaded via `@vercel/blob.put()`. The
-   returned `https://*.public.blob.vercel-storage.com/...` URL is stored in
-   the DB (e.g. `Sponsor.logoUrl`, `PaymentScreenshot.filePath`).
-2. **Local filesystem (dev fallback)** — when Blob env vars are absent,
-   files are written to `public/uploads/` and a `/uploads/...` URL is
-   returned. This directory is git-ignored.
-
-Both code paths validate MIME type, sniff the magic number, and enforce an
-8 MB size limit before storing.
-
-The returned `StoredFile.relativePath` is the URL you put in `<img src>` or
-`<Image src>`. The `next.config.ts` `images.remotePatterns` allows any HTTPS
-hostname for blob URLs.
-
----
-
-## 8. Environment variables
-
-| Name                        | Required | Purpose                                                          |
-|-----------------------------|:--------:|------------------------------------------------------------------|
-| `DATABASE_URL`               | yes      | PostgreSQL connection string (Neon / Vercel Postgres / self-hosted). Used by Prisma. |
-| `NEXTAUTH_SECRET`           | yes      | JWT signing secret. Generate with `openssl rand -base64 32`.      |
-| `NEXTAUTH_URL`              | yes      | Public URL of the deployment (used for callback URLs).            |
-| `ADMIN_USERNAME`            | seed     | Bootstrap super admin username. Required for `bun run db:seed`.  |
-| `ADMIN_EMAIL`               | seed     | Bootstrap super admin email. Required for `bun run db:seed`.      |
-| `ADMIN_PASSWORD`            | seed     | Bootstrap super admin password. Required for `bun run db:seed`.   |
-| `HM3_BERSERK_SECRET`        | seed     | BERSERK recovery secret for credential rotation. If absent at seed time, one is generated and printed once to stdout. Save it before deploying. |
-| `COORDINATOR_USERNAME`      | optional | Coordinator login. Coordinator account is created only if both username and password are set. |
-| `COORDINATOR_PASSWORD`      | optional | Coordinator password (paired with `COORDINATOR_USERNAME`).        |
-| `COORDINATOR_EMAIL`         | optional | Coordinator email. Defaults to `<username>@hackmitten.local`.     |
-| `FOOD_ADMIN_USERNAME`       | optional | Food admin login. Created only if both username and password are set. |
-| `FOOD_ADMIN_PASSWORD`       | optional | Food admin password (paired with `FOOD_ADMIN_USERNAME`).          |
-| `FOOD_ADMIN_EMAIL`          | optional | Food admin email. Defaults to `<username>@hackmitten.local`.     |
-| `BLOB_READ_WRITE_TOKEN`     | optional | Vercel Blob read/write token. When set with `BLOB_STORE_ID`, file uploads go to Blob. |
-| `BLOB_STORE_ID`             | optional | Vercel Blob store id (paired with `BLOB_READ_WRITE_TOKEN`).       |
-| `EMAIL_API_URL`             | optional | Email provider endpoint. If unset, emails are logged to console. |
-| `EMAIL_API_KEY`             | optional | Bearer token for the email provider.                            |
-| `EMAIL_FROM`                | required in production | Verified sender address for Resend outbound emails.       |
-
-> The seed scripts never write to `.env.local` or any file. They read from
-> `process.env` and fail loudly when required variables are missing.
-
----
-
-## 9. Local development setup
-
-```bash
-# 1. Install dependencies
-bun install
-
-# 2. Create your .env (copy from .env.example and fill in real values)
-cp .env.example .env
-# Edit .env — at minimum set DATABASE_URL, NEXTAUTH_SECRET, ADMIN_*
-
-# 3. Generate the Prisma client + apply migrations
-bun run db:generate
-bun run db:migrate:deploy          # applies existing migrations
-# (for local-only schema changes: bun run db:migrate --name <change>)
-
-# 4. Bootstrap the production-shaped data (admin + config + default meals)
-bun run db:seed
-
-# 5. Optionally load demo content (teams / sponsors / gallery / etc.)
-#    Refuses to run with NODE_ENV=production.
-bun run db:seed:demo
-
-# 6. Run the dev server (Next.js on port 3000)
-bun run dev
-```
-
-Open the **Preview Panel** to view the app. Do not navigate to
-`http://localhost:3000` directly — it is an internal address.
-
----
-
-## 10. Database workflow
-
-| Task                              | Command                                          |
-|-----------------------------------|--------------------------------------------------|
-| Regenerate Prisma client           | `bun run db:generate`                            |
-| Create a new migration             | `bun run db:migrate --name <change>`             |
-| Apply migrations (dev)             | `bun run db:migrate`                             |
-| Apply migrations (prod / CI)       | `bun run db:migrate:deploy`                      |
-| Reset DB and re-apply all migrations | `bun run db:reset`                            |
-| Push schema without a migration    | `bun run db:push --accept-data-loss` (destructive) |
-| Bootstrap production data          | `bun run db:seed`                                |
-| Load demo data (dev only)          | `bun run db:seed:demo`                           |
-
-Migration files live in `prisma/migrations/` and are committed. The base
-migration `20260921000000_init` creates every table from an empty schema.
-
----
-
-## 11. Testing
-
-```bash
-bun test                                  # all tests
-bun test tests/validators.test.ts         # Zod schemas (registration, payment, food, BERSERK)
-bun test tests/permissions.test.ts        # Role × permission matrix
-bun test tests/event-state.test.ts        # Event lifecycle (UPCOMING / OPEN / LIVE / ENDED)
-bun test tests/food-checkin.test.ts       # DB duplicate prevention (skipped if DATABASE_URL is not postgres)
-bun run lint                              # ESLint
-bun run build                             # Production build
-```
-
-The food-checkin test needs a live PostgreSQL instance and is automatically
-skipped when `DATABASE_URL` is missing or not a postgres URL.
-
----
-
-## 12. Deployment checklist
-
-Pre-deploy (each item is a hard requirement):
-
-1. **Database** — provisioned PostgreSQL (Neon recommended). `DATABASE_URL`
-   is set with `?sslmode=require` and a healthy connection.
-2. **Migrations applied** — `bun run db:migrate:deploy` runs cleanly.
-3. **Secrets** — `NEXTAUTH_SECRET` set (≥ 32 chars, base64-encoded).
-4. **Admin credentials** — `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`
-   set to strong values. `HM3_BERSERK_SECRET` set (or capture the one printed
-   by the seed script).
-5. **Blob** — `BLOB_READ_WRITE_TOKEN` + `BLOB_STORE_ID` set on Vercel.
-6. **NEXTAUTH_URL** — set to the production domain.
-7. **Build** — `bun run build` passes locally with the production env.
-8. **Seed** — `bun run db:seed` runs cleanly. Do NOT run `db:seed:demo` in
-   production — it will refuse anyway because `NODE_ENV=production`.
-
-Post-deploy:
-
-- Visit `/login` and log in with the admin credentials.
-- Visit `/admin/settings` and adjust event timing, fee, prize pool, UPI ID,
-  UPI QR URL.
-- Visit `/admin/meals` and configure meal times.
-- Visit `/admin/coordinators` and add the real coordinator profiles.
-- Visit `/admin/sponsors`, `/admin/gallery`, `/admin/winners` to upload
-  real assets.
-
----
-
-## 13. Incident recovery
-
-### Lost super-admin password
-
-If you have the BERSERK secret: log in once with the old password (if any
-admin still has it) and rotate via `/admin/credentials`.
-
-If the password is lost AND no one can log in: rotate via the DB directly.
-
-```sql
--- Generate a new bcrypt hash first, then run:
-UPDATE "User"
-SET "passwordHash" = '<new bcrypt hash>'
-WHERE "username" = '<admin username>';
-```
-
-### Lost BERSERK secret
-
-You must reset `recoveryHash` to a known bcrypt hash via SQL, then use that
-plaintext to rotate via `/admin/credentials`. There is no other recovery
-path — by design.
-
-```sql
--- bcrypt('new-berserk-secret', 12)
-UPDATE "User"
-SET "recoveryHash" = '<new bcrypt hash>'
-WHERE "role" = 'SUPER_ADMIN';
-```
-
-### Bad config (broken public site)
-
-Most public-site breakage is config-driven. Fix at `/admin/settings` or
-temporarily reset the singleton:
-
-```sql
-UPDATE "EventConfig" SET "heroVisible" = true, "winnersVisible" = false WHERE id = 'singleton';
-```
-
-### Rollback a destructive admin change
-
-`/admin/change-history` lists every mutation with previousState / newState
-snapshots. Select a row and click **Rollback** — the previousState is
-restored and the rollback is itself recorded.
-
-### Rollback a bad migration
-
-```bash
-# Add a new migration that reverses the bad one:
-bun run db:migrate --name revert_<change>
-# Then deploy:
+```sh
 bun run db:migrate:deploy
 ```
 
-Never edit a committed migration. Always add a new one.
+For initial provisioning only:
 
----
+```sh
+bun run db:bootstrap
+```
 
-## 14. What NOT to do
+Bootstrap requires the ADMIN credential trio and HM3_BERSERK_SECRET. It creates the singleton configuration, default meals, and configured operational users. It does not load demo records. Re-running it intentionally reconciles configured operational credentials; protect its environment and run only as an operator.
 
-- Do not modify `src/components/three/space-scene.tsx` — the 3D scene is
-  tuned for the cinematic experience and must stay intact.
-- Do not run `bun run db:seed:demo` in production.
-- Do not commit `.env`, `.env.local`, or any file containing real secrets.
-- Do not commit files in `public/uploads/` — they are user-generated and
-  git-ignored.
-- Do not edit committed migrations in place — add a new one instead.
-- Do not bypass `requirePermission()` in API routes — every mutation must
-  go through the role × permission matrix.
+Runtime from the versioned artifact directory:
+
+```sh
+PORT=3000 HOSTNAME=127.0.0.1 node server.js
+```
+
+Use `deploy/hackmitten.service` as a starting systemd unit. Place a TLS reverse proxy in front, forward the canonical host/protocol, enforce a 9 MiB request body limit for upload routes and rate limits for `/api/auth/callback/credentials` and `/api/registrations`, and proxy to `127.0.0.1:3000`. The app adds nosniff, frame, referrer, and permissions headers. Health/readiness is `GET /api/health`: 200 means the app and database are available; 503 means database readiness failed. Response details are intentionally generic.
+
+## Operations
+
+### Logs and restart
+Use `journalctl -u hackmitten` and `systemctl restart hackmitten`. Application logs go to stdout/stderr for systemd capture. Do not log credentials, tokens, payment image paths, or provider secrets.
+
+### Persistent data and backup
+Back up PostgreSQL and both configured storage directories. Keep private screenshot backups access-controlled and encrypted at rest. Coordinate database and filesystem snapshots so database screenshot rows do not outlive required files. Test restore procedures in a non-production environment.
+
+### Upgrade
+1. Build and inspect a versioned artifact on Linux.
+2. Back up PostgreSQL and storage.
+3. Deploy the artifact to a new release directory.
+4. Run `bun run db:migrate:deploy` once with production database configuration.
+5. Switch the service symlink/current release and restart.
+6. Verify `/api/health`, login, registration, and private screenshot access.
+
+### Rollback
+Switch the service back to the previous application release and restart. Database migrations are forward-only unless a migration explicitly provides a safe reverse. Do not assume rolling back application files reverses schema/data changes. If the previous application cannot work with the migrated schema, restore a coordinated pre-upgrade database and storage backup under an approved recovery plan.
+
+### Development and tests
+`bun run db:migrate` creates/applies development migrations. Never use reset or schema-push commands against production. `bun test` runs unit tests; `tests/food-checkin.test.ts` requires a dedicated disposable PostgreSQL database and otherwise skips. Run `bun run lint`, `bun run typecheck`, `bun run db:validate`, `bun test`, and `bun run build` before release.
+
+## Event rules and content
+
+Canonical event values are stored in bootstrap defaults and editable event configuration: Hackmitten 3.0, 29 October 2026 at 11:00 Asia/Kolkata, 24 hours, registration deadline 22 October 2026 at 11:00 IST, fee ₹1,000, prize pool ₹1,00,000, team size 3–4, venue Maharaja Institute of Technology Thandavapura. Bootstrap preserves an existing event configuration. Do not re-run bootstrap to overwrite operator-managed event values.
+
+Source-controlled gallery, sponsor, coordinator, developing-team, and winner content remains under `src/data` where currently used; database-managed content is managed through admin APIs. Do not replace real event content with sample data.
+
+## Security and privacy
+
+- Never collect participant passport/student photographs.
+- QR tokens are random opaque 192-bit values; the public pass includes pass details needed by the participant and omits college/contact information.
+- Payment screenshots are never served through public upload URLs.
+- Every sensitive API must keep server-side permission checks.
+- Keep credentials in the secret manager and rotate compromised values.
+- Use a TLS reverse proxy and restrict direct network access to the Node listener.

@@ -46,11 +46,12 @@ export async function requirePermission(permission: Permission): Promise<AuthCon
 export function jsonError(err: unknown): Response {
   if (err instanceof PermissionError) {
     return Response.json(
-      { error: err.message, code: err.statusCode === 401 ? "UNAUTHORIZED" : "FORBIDDEN" },
+      { error: err.statusCode === 401 ? "Authentication required" : "Forbidden", code: err.statusCode === 401 ? "UNAUTHORIZED" : "FORBIDDEN" },
       { status: err.statusCode },
     );
   }
-  console.error("[api] unhandled error:", err);
-  const msg = err instanceof Error ? err.message : "Internal server error";
-  return Response.json({ error: msg, code: "INTERNAL" }, { status: 500 });
+  console.error("[api] unhandled error", {
+    name: err instanceof Error ? err.name : "UnknownError",
+  });
+  return Response.json({ error: "An unexpected error occurred.", code: "INTERNAL" }, { status: 500 });
 }

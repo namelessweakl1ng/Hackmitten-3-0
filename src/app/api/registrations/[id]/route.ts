@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { jsonError } from "@/lib/api-auth";
+import { jsonError, requirePermission } from "@/lib/api-auth";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    await requirePermission("registration:view");
     const { id } = await params;
     const team = await db.team.findUnique({
       where: { id },

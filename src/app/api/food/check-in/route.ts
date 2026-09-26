@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { foodCheckInSchema } from "@/lib/validators";
 import { requirePermission, jsonError } from "@/lib/api-auth";
-import { writeAudit } from "@/lib/audit";
 import { Prisma } from "@prisma/client";
 
 /**
@@ -31,18 +30,11 @@ export async function POST(req: Request) {
     }
     const { qrToken, mealId } = parsed.data;
 
-    // Look up participant by qrToken (primary) or participantId (fallback)
-    let participant = await db.participant.findUnique({
+    // QR credentials are opaque tokens; sequential participant IDs are never accepted as credentials.
+    const participant = await db.participant.findUnique({
       where: { qrToken },
       include: { team: true },
     });
-    if (!participant) {
-      // Fallback: try looking up by participantId (in case the QR encoded the ID instead of the token)
-      participant = await db.participant.findUnique({
-        where: { participantId: qrToken },
-        include: { team: true },
-      });
-    }
     if (!participant) {
       return NextResponse.json(
         { error: "Invalid QR — participant not found", code: "INVALID_QR" },
@@ -68,23 +60,27 @@ export async function POST(req: Request) {
     }
 
     try {
-      const checkIn = await db.foodCheckIn.create({
-        data: {
-          participantId: participant.id,
-          mealId: meal.id,
-          checkedInById: ctx.userId,
-        },
-        include: {
-          participant: { include: { team: true } },
-          meal: true,
-        },
-      });
-
-      await writeAudit({
-        userId: ctx.userId,
-        teamId: participant.teamId,
-        action: "FOOD_CHECKIN",
-        detail: `${meal.label} · ${participant.fullName}`,
+      const checkIn = await db.$transaction(async (tx) => {
+        const created = await tx.foodCheckIn.create({
+          data: {
+            participantId: participant.id,
+            mealId: meal.id,
+            checkedInById: ctx.userId,
+          },
+          include: {
+            participant: { include: { team: true } },
+            meal: true,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            userId: ctx.userId,
+            teamId: participant.teamId,
+            action: "FOOD_CHECKIN",
+            detail: `${meal.label} - ${participant.fullName}`,
+          },
+        });
+        return created;
       });
 
       return NextResponse.json({

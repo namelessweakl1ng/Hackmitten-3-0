@@ -101,6 +101,10 @@ export async function ensureOperationalUser({
     name: normalizedName,
   };
 
+  if (existing && existing.role !== role) {
+    throw new Error("Bootstrap credentials match an account with a different role; refusing to change its role");
+  }
+
   const user = existing
     ? await database.user.update({ where: { id: existing.id }, data })
     : await database.user.create({ data });

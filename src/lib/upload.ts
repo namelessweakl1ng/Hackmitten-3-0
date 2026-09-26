@@ -1,14 +1,10 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
 
-const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
-const PRIVATE_UPLOAD_ROOT = path.join(process.cwd(), ".private-uploads");
+const UPLOAD_ROOT = path.resolve(process.env.HM3_PUBLIC_UPLOAD_DIR || path.join(process.cwd(), "storage", "public"));
+const PRIVATE_UPLOAD_ROOT = path.resolve(process.env.HM3_PRIVATE_UPLOAD_DIR || path.join(process.cwd(), "storage", "private"));
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const MAX_SIZE = 8 * 1024 * 1024;
-
-function isVercelRuntime(): boolean {
-  return Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.VERCEL_URL);
-}
 
 function supabaseStorageConfigured(): boolean {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY);
@@ -34,7 +30,8 @@ export interface StoredFile {
 function safeName(prefix: string, mime: string): string {
   const ext = guessExtension(mime);
   const random = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
-  return `${prefix}_${random}.${ext}`;
+  const safePrefix = prefix.toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 40) || "upload";
+  return `${safePrefix}_${random}.${ext}`;
 }
 
 function guessExtension(mime: string): string {
@@ -47,7 +44,7 @@ function guessExtension(mime: string): string {
   }
 }
 
-function detectImageMime(head: Uint8Array): string | null {
+export function detectImageMime(head: Uint8Array): string | null {
   if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return "image/jpeg";
   if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) return "image/png";
   if (head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46) return "image/gif";
@@ -64,6 +61,19 @@ function detectImageMime(head: Uint8Array): string | null {
     return "image/webp";
   }
   return null;
+}
+
+export async function validateImageFile(file: File): Promise<string> {
+  if (!file || file.size === 0) throw new UploadError("The selected image is empty.");
+  if (file.size > MAX_SIZE) throw new UploadError(`File too large (max ${Math.floor(MAX_SIZE / 1024 / 1024)}MB)`);
+  const detected = detectImageMime(new Uint8Array(await file.slice(0, 12).arrayBuffer()));
+  if (!detected || !ALLOWED_MIME.has(detected)) {
+    throw new UploadError("File content is not a supported image.");
+  }
+  if (file.type !== detected) {
+    throw new UploadError("File content does not match the declared image type.");
+  }
+  return detected;
 }
 
 export async function storeImage(opts: {
@@ -87,78 +97,14 @@ async function storeFileInternal(
   prefix: string,
   isPrivate: boolean,
 ): Promise<StoredFile> {
-  if (!file) throw new UploadError("No file provided");
-
-  if (!ALLOWED_MIME.has(file.type)) {
-    throw new UploadError(
-      `Unsupported file type: ${file.type}. Allowed: JPEG, PNG, WebP, GIF`,
-    );
-  }
-
-  if (file.size > MAX_SIZE) {
-    throw new UploadError(
-      `File too large (max ${Math.floor(MAX_SIZE / 1024 / 1024)}MB)`,
-    );
-  }
-
-  const bufHeader = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-  const detected = detectImageMime(bufHeader);
-
-  if (detected && !ALLOWED_MIME.has(detected)) {
-    throw new UploadError("File content does not match allowed image types");
-  }
-
-  const effectiveMime = detected ?? file.type;
+  const effectiveMime = await validateImageFile(file);
   const fileName = safeName(prefix, effectiveMime);
 
   if (isPrivate) {
-    if (!supabaseStorageConfigured()) {
-      if (isVercelRuntime()) {
-        throw new UploadError(
-          "Payment screenshot storage is not configured. Configure Supabase Storage credentials for this deployment.",
-        );
-      }
-
-      return saveToLocal(file, fileName, true);
-    }
-
-    return uploadToSupabase(file, fileName);
+    return saveToLocal(file, fileName, true, effectiveMime);
   }
 
-  return saveToLocal(file, fileName, false);
-}
-
-async function uploadToSupabase(
-  file: File,
-  fileName: string,
-): Promise<StoredFile> {
-  const { supabaseAdmin } = await import("@/lib/supabase-admin");
-
-  const storagePath = `payments/${fileName}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  const { error } = await supabaseAdmin.storage
-    .from("payment-screenshots")
-    .upload(storagePath, buffer, {
-      contentType: file.type,
-      cacheControl: "3600",
-      upsert: false,
-    });
-
-  if (error) {
-    throw new UploadError(
-      `Failed to store payment screenshot: ${error.message}`,
-    );
-  }
-
-  return {
-    relativePath: `supabase://payment-screenshots/${storagePath}`,
-    absolutePath: `supabase://payment-screenshots/${storagePath}`,
-    fileName,
-    mimeType: file.type,
-    sizeBytes: file.size,
-    isPrivate: true,
-  };
+  return saveToLocal(file, fileName, false, effectiveMime);
 }
 
 /**
@@ -201,6 +147,7 @@ async function saveToLocal(
   file: File,
   fileName: string,
   isPrivate: boolean,
+  mimeType: string,
 ): Promise<StoredFile> {
   if (isPrivate) {
     await fs.mkdir(PRIVATE_UPLOAD_ROOT, { recursive: true });
@@ -214,7 +161,7 @@ async function saveToLocal(
       relativePath: `private://${fileName}`,
       absolutePath: abs,
       fileName,
-      mimeType: file.type,
+      mimeType,
       sizeBytes: file.size,
       isPrivate,
     };
@@ -228,10 +175,10 @@ async function saveToLocal(
   await fs.writeFile(abs, Buffer.from(buf));
 
   return {
-    relativePath: `/uploads/${fileName}`,
+    relativePath: `/api/uploads/${fileName}`,
     absolutePath: abs,
     fileName,
-    mimeType: file.type,
+    mimeType,
     sizeBytes: file.size,
     isPrivate,
   };
@@ -249,11 +196,18 @@ export async function readLocalPrivateFile(relativePath: string): Promise<{
     return null;
   }
 
-  const fileName = relativePath.replace("private://", "");
+  const fileName = relativePath.slice("private://".length);
+  if (!/^[a-z0-9_-]+_[a-f0-9]{12}\.(?:jpg|png|webp|gif)$/.test(fileName)) return null;
   const abs = path.join(PRIVATE_UPLOAD_ROOT, fileName);
 
   try {
-    const data = await fs.readFile(abs);
+    let data: Buffer;
+    try {
+      data = await fs.readFile(abs);
+    } catch {
+      // Read the former local directory for files uploaded before storage was centralized.
+      data = await fs.readFile(path.join(process.cwd(), ".private-uploads", fileName));
+    }
     const ext = path.extname(fileName).toLowerCase();
 
     const contentType =

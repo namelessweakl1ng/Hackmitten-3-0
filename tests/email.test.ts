@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { claimRegistrationAcknowledgement } from "@/lib/registration-acknowledgement";
+import { claimRegistrationAcknowledgement, releaseRegistrationAcknowledgementClaim } from "@/lib/registration-acknowledgement";
 import {
   approvalEmailHtml,
   approvalEmailText,
@@ -170,15 +170,25 @@ describe("registration acknowledgement email", () => {
   });
 
   it("claims an acknowledgement only once across retries", async () => {
-    let attempts = 0;
+    let claimedAt: Date | null = null;
     const client = {
       team: {
-        updateMany: async () => ({ count: attempts++ === 0 ? 1 : 0 }),
+        updateMany: async ({ data }: { data: { registrationAcknowledgementAttemptedAt: Date | null } }) => {
+          if (data.registrationAcknowledgementAttemptedAt === null) {
+            claimedAt = null;
+            return { count: 1 };
+          }
+          if (claimedAt) return { count: 0 };
+          claimedAt = data.registrationAcknowledgementAttemptedAt;
+          return { count: 1 };
+        },
       },
     };
 
     await expect(claimRegistrationAcknowledgement(client, "team-1")).resolves.toBe(true);
     await expect(claimRegistrationAcknowledgement(client, "team-1")).resolves.toBe(false);
-    expect(attempts).toBe(2);
+    const attemptTime = claimedAt!;
+    await releaseRegistrationAcknowledgementClaim(client, "team-1", attemptTime);
+    await expect(claimRegistrationAcknowledgement(client, "team-1")).resolves.toBe(true);
   });
 });

@@ -15,8 +15,8 @@ export async function writeAudit(opts: {
         detail: opts.detail ?? null,
       },
     });
-  } catch (err) {
+  } catch {
     // Never let audit failure break the primary operation
-    console.error("[audit] failed to write log:", err);
+    console.error("[audit] failed to write log");
   }
 }

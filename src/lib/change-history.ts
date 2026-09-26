@@ -28,9 +28,9 @@ export async function recordChange(opts: {
         changedById: opts.changedById ?? null,
       },
     });
-  } catch (err) {
+  } catch {
     // Never let history recording break the primary operation
-    console.error("[change-history] failed to record:", err);
+    console.error("[change-history] failed to record");
   }
 }
 

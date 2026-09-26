@@ -44,6 +44,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       return new Response(result.stream, {
         headers: {
           "Content-Type": result.contentType,
+          "X-Content-Type-Options": "nosniff",
           "Cache-Control": "no-store, no-cache, must-revalidate",
         },
       });
@@ -58,6 +59,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       return new Response(new Uint8Array(result.data), {
         headers: {
           "Content-Type": result.contentType,
+          "X-Content-Type-Options": "nosniff",
           "Cache-Control": "no-store, no-cache, must-revalidate",
         },
       });

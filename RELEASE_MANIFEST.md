@@ -1,175 +1,44 @@
-# HACKMITTEN 3.0 — Release Manifest
+# Release manifest
 
-Production release cleanup. Generated as part of the Hackmitten 3.0
-production-readiness pass.
+## Runtime architecture
 
----
+- Next.js 16 App Router, React 19, TypeScript, NextAuth credentials auth.
+- PostgreSQL with Prisma 6 and committed forward migrations.
+- Standalone Node.js artifact at `.next/standalone/`, supervised by systemd behind a TLS reverse proxy.
+- Persistent filesystem for new uploads: configured public and private directories. Public uploads stream through `/api/uploads/[fileName]`; payment screenshots stream only through the permission-protected admin endpoint.
+- Resend for configured production email.
+- Supabase client is retained only to read legacy screenshot objects from existing database rows. New uploads use the filesystem. Vercel Blob is not used.
 
-## Included — what ships
+## Build and database lifecycle
 
-### Application
+- `bun run build`: Prisma client generation, Next.js production build, standalone runtime preparation. No database migration or bootstrap.
+- `bun run db:migrate:deploy`: explicit production migration step.
+- `bun run db:bootstrap`: explicit provisioning of initial/configured operational users, singleton event config, and default meals.
+- `bun run start`: starts standalone `server.js`; set `PORT` and `HOSTNAME`.
+- No production database reset or `db push` is part of deployment.
 
-- `src/app/` — Next.js App Router pages and ~30 API route handlers
-  - Public: `/`, `/register`, `/login`, `/pass/[qrToken]`
-  - Admin: `/admin/*` (15 sections, role-gated)
-  - Coordinator: `/coordinator`
-  - Food admin: `/food-admin`
-  - API: `/api/auth/*`, `/api/registrations/*`, `/api/admin/*`,
-    `/api/food/*`, `/api/pass/*`, `/api/config`, `/api/event-state`,
-    `/api/meals`, `/api/sponsors`, `/api/gallery`, `/api/coordinators`,
-    `/api/winners`, `/api/phases`
-- `src/components/` — UI (shadcn/ui), sections, admin managers,
-  coordinator portal, public nav, auth providers, three / space-scene
-- `src/lib/` — auth, db, api-auth, permissions, validators, upload,
-  constants, audit, change-history, event-state, email
+## Artifact
 
-### Database
+Build with `bun install --frozen-lockfile && bun run build` on Linux. Package `.next/standalone/`, which contains `server.js`, traced runtime dependencies, `.next/static`, and public static assets. Do not include environment files, database credentials, storage contents, or development databases. Runtime persistent storage must be mounted externally.
 
-- `prisma/schema.prisma` — PostgreSQL schema (14 models, 7 enums)
-- `prisma/migrations/20260921000000_init/migration.sql` — base migration
-  that creates every table from an empty schema
-- `prisma/migrations/migration_lock.toml` — locks provider to `postgresql`
-- `prisma/seed.ts` — **production bootstrap** (admin / config / meals,
-  reads all credentials from env, fails loudly if required vars are missing)
-- `prisma/seed-demo.ts` — **development demo data** (refuses to run when
-  `NODE_ENV=production`)
+## Required runtime configuration
 
-### Configuration
+`DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `HM3_PUBLIC_UPLOAD_DIR`, and `HM3_PRIVATE_UPLOAD_DIR`. Configure `RESEND_API_KEY` and `EMAIL_FROM` for production email. Bootstrap-only variables: `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `HM3_BERSERK_SECRET`. See `.env.example`.
 
-- `next.config.ts` — `output: "standalone"`, `images.remotePatterns` for
-  any HTTPS host (for Vercel Blob URLs), no `ignoreBuildErrors`, default
-  `reactStrictMode: true`
-- `.env.example` — names every env var the app and seed scripts expect
-- `tsconfig.json`, `eslint.config.mjs`, `tailwind.config.ts`,
-  `postcss.config.mjs`, `components.json`
-- `package.json` — `bun run db:seed`, `bun run db:seed:demo`,
-  `bun run db:migrate:deploy`, plus the existing `dev` / `build` / `start` /
-  `lint` / `db:*` scripts
+## Operations
 
-### Tests
+- Readiness: `GET /api/health`, HTTP 200 when PostgreSQL is available, 503 when unavailable.
+- Primary deployment: standalone Node.js process under systemd, loopback port 3000, nginx/Caddy TLS reverse proxy.
+- Persistent paths: operator-configured `HM3_PUBLIC_UPLOAD_DIR` and `HM3_PRIVATE_UPLOAD_DIR`, for example `/var/lib/hackmitten/public` and `/var/lib/hackmitten/private`.
+- Back up PostgreSQL and both filesystem paths. Restrict private screenshot access and backups.
+- Rollback application release by switching back to the prior artifact. Database migration rollback requires an explicit safe reverse migration or coordinated backup restore.
 
-- `tests/validators.test.ts` — Zod schemas (registration, payment, food
-  check-in, BERSERK recovery)
-- `tests/permissions.test.ts` — role × permission matrix
-- `tests/event-state.test.ts` — event lifecycle
-- `tests/food-checkin.test.ts` — DB duplicate-prevention (skipped when no
-  PostgreSQL DATABASE_URL is available)
+## Repository areas
 
-### Documentation
+- `src/app`: pages and API handlers.
+- `src/lib`: authentication, authorization, business rules, Prisma, storage, email, audit, and change history.
+- `prisma/schema.prisma`, `prisma/migrations`: PostgreSQL model and migration history.
+- `tests`: Bun unit tests and optional PostgreSQL integration tests.
+- `deploy/hackmitten.service`: systemd unit template.
 
-- `README.md` — concise setup + deployment guide
-- `HUMAN_DEVELOPER_GUIDE.md` — engineering reference
-- `RELEASE_MANIFEST.md` — this file
-
----
-
-## Removed — what was cleaned up
-
-| Removed path                       | Reason                                                            |
-|------------------------------------|-------------------------------------------------------------------|
-| `scripts/seed.ts`                  | Replaced by `prisma/seed.ts` + `prisma/seed-demo.ts` (env-driven) |
-| `scripts/clear-data.ts`            | One-shot helper, not needed in production                          |
-| `scripts/*.png`                    | AI screenshots, not source                                          |
-| `scripts/*.sh`                     | One-shot build helpers, not part of the runtime                    |
-| `scripts/` (whole directory)       | Now empty — removed                                                |
-| `upload/`                          | Staging area for AI-pasted images (mount point, kept empty)         |
-| `tool-results/`                    | Agent scratch dir, not part of the app                             |
-| `skills/`                          | Bundled AI skills directory                                         |
-| `examples/`                        | Demo code (websocket etc.), not part of the app                    |
-| `mini-services/`                   | Sidecar services (chat / python runtime) — not part of the app     |
-| `.zscripts/`                       | Local automation scripts                                            |
-| `Caddyfile`                        | Internal reverse-proxy config — production uses Vercel's edge      |
-| `DOCUMENTATION.md`                 | Replaced by `HUMAN_DEVELOPER_GUIDE.md` + `README.md`                |
-| `download/`                        | Previous ZIP artifacts                                              |
-| `z-ai-web-dev-sdk` (package.json)  | Was only used by removed skills/examples; not imported anywhere in `src/` |
-| `db/custom.db`                     | Old SQLite file from the dev environment                            |
-
----
-
-## Externalized — what moved off the repo
-
-| Concern              | Before                                            | After                                                                  |
-|----------------------|---------------------------------------------------|------------------------------------------------------------------------|
-| Database             | SQLite file at `db/custom.db`                     | PostgreSQL via `DATABASE_URL` (Neon / Vercel Postgres / self-hosted)   |
-| File uploads         | Local-only `/public/uploads/`                     | Vercel Blob (`@vercel/blob`) in production, local fallback in dev      |
-| Admin credentials    | Hardcoded fallbacks in `scripts/seed.ts`          | Required env vars (`ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`) |
-| BERSERK secret       | Persisted to `.env.local`                         | Required env var `HM3_BERSERK_SECRET` (or generated + printed once)   |
-| Coordinator account  | Always created with `change-me` password         | Optional — created only if both `COORDINATOR_USERNAME` and `_PASSWORD` are set |
-| Food admin account   | Always created with `change-me` password         | Optional — created only if both `FOOD_ADMIN_USERNAME` and `_PASSWORD` are set |
-| NextAuth secret      | Hardcoded dev fallback `"dev-only-secret-..."`   | Required env var `NEXTAUTH_SECRET` — throws at startup if missing     |
-| UPI ID               | Hardcoded `"hackmitten@upi"` fallback             | Pulled from event config only (admin-edited at `/admin/settings`)     |
-
----
-
-## Required environment variables
-
-Production deployment must set every required variable below. See
-`.env.example` for a copy-paste template.
-
-### Required
-
-- `DATABASE_URL`
-- `NEXTAUTH_SECRET`
-- `NEXTAUTH_URL`
-- `ADMIN_USERNAME`
-- `ADMIN_EMAIL`
-- `ADMIN_PASSWORD`
-- `HM3_BERSERK_SECRET` (or capture the one printed by `bun run db:seed`)
-- `BLOB_READ_WRITE_TOKEN`
-- `BLOB_STORE_ID`
-
-### Optional
-
-- `COORDINATOR_USERNAME`, `COORDINATOR_PASSWORD`, `COORDINATOR_EMAIL`
-- `FOOD_ADMIN_USERNAME`, `FOOD_ADMIN_PASSWORD`, `FOOD_ADMIN_EMAIL`
-- `EMAIL_API_URL`, `EMAIL_API_KEY`, `EMAIL_FROM`
-
----
-
-## Deployment prerequisites
-
-1. **Vercel project** linked to this repo. Framework preset: **Next.js**.
-   Build command: `next build`. Output: standalone (handled by
-   `next.config.ts`).
-2. **Neon PostgreSQL** (or any managed Postgres). Whitelist Vercel IPs (or
-   use the pooled connection string). Copy the connection string into
-   `DATABASE_URL`.
-3. **Vercel Blob** store created. Copy the read/write token and store id
-   into `BLOB_READ_WRITE_TOKEN` and `BLOB_STORE_ID`.
-4. **Secrets** populated on Vercel (see the list above).
-5. **Migration deploy** step. Either:
-   - Run `bun run db:migrate:deploy` as part of the Vercel build script, or
-   - Run it once from your machine before the first deploy.
-6. **Seed** step. Run `bun run db:seed` once after the first successful
-   deploy to create the super admin, event config singleton, and default
-   meals. Do NOT run `bun run db:seed:demo` in production — it will refuse.
-
----
-
-## Known operational notes
-
-- **`bun run build`** no longer copies `.next/static` and `public/` into
-  `.next/standalone/`. With Next.js 16 + `output: "standalone"`, the
-  standalone output already includes everything needed. If you serve from
-  `.next/standalone/`, verify static asset serving on your host (Vercel
-  handles this automatically).
-- **`bun run start`** runs the standalone server. Vercel deployments do not
-  use this — Vercel builds and serves the app directly.
-- **`bun test`** runs the validators / permissions / event-state tests
-  unconditionally. The food-checkin DB test auto-skips when `DATABASE_URL`
-  is missing or not a postgres URL, so the suite still passes in CI
-  without a live database.
-- **`public/uploads/`** is git-ignored. Files uploaded in dev mode stay on
-  disk; they are not part of the release.
-- **`.env` and `.env.local`** are git-ignored. The seed scripts do not
-  write to them — they read from `process.env`.
-- **BERSERK recovery secret** is the only fallback for lost super-admin
-  passwords. Store it in your team's secret manager immediately after
-  running `bun run db:seed` for the first time.
-- **Migrations are committed**. Never edit a migration in place — add a
-  new one with `bun run db:migrate --name <change>`.
-- **Change history + rollback** is per-row, per-section. Find a destructive
-  change at `/admin/change-history` and click Rollback to restore the
-  previous state.
-- **Audit log** is append-only and never cleaned automatically. Admins can
-  bulk-delete via `/admin/audit` (super admin only).
+No passport/student image collection is implemented. Demo seeding is development-only and must not be run in production.

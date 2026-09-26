@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { normalizeRegistrationMembers, registrationSchema } from "@/lib/validators";
 import { jsonError } from "@/lib/api-auth";
-import { getEventState } from "@/lib/event-state";
+import { computeEventState, getEventState } from "@/lib/event-state";
 import { normalizeTeamName } from "@/lib/team-name";
-import { sendRegistrationAcknowledgementEmail, type EmailResult } from "@/lib/email";
-import { claimRegistrationAcknowledgement } from "@/lib/registration-acknowledgement";
+import { attemptRegistrationAcknowledgement } from "@/lib/registration-acknowledgement";
 
 type RawQueryClient = Pick<typeof db, "$queryRaw">;
 
@@ -91,6 +90,8 @@ export async function POST(req: Request) {
     // Re-counting inside the transaction prevents the race where two registrations
     // slip through the capacity check simultaneously.
     const team = await db.$transaction(async (tx) => {
+      // Serialize capacity checks so distinct team names cannot exceed the limit.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('hackmitten-registration-capacity'))`;
       // Serialize submissions for the same canonical name so equivalent names
       // cannot both pass the check before either insert commits.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${normalizedTeamName}))`;
@@ -101,6 +102,11 @@ export async function POST(req: Request) {
 
       const currentCount = await tx.team.count();
       const cfg = await tx.eventConfig.findUnique({ where: { id: "singleton" } });
+      if (!cfg) throw new Error("EVENT_CONFIG_MISSING");
+      const currentEventState = computeEventState({ ...cfg, currentCount });
+      if (currentEventState.state !== "REGISTRATION_OPEN") {
+        throw new Error("Registration is closed.");
+      }
       const capacity = cfg?.registrationCapacity ?? 60;
       const open = cfg?.registrationsOpen ?? true;
       if (!open) {
@@ -130,53 +136,8 @@ export async function POST(req: Request) {
       });
     });
 
-    let emailResult: EmailResult = {
-      success: false,
-      message: "Registration acknowledgement was not attempted",
-      provider: "configuration",
-    };
-
-    // Claim the one acknowledgement attempt after the registration transaction commits.
-    // The claim prevents duplicate sends from concurrent or retried requests.
-    const acknowledgementClaimed = await claimRegistrationAcknowledgement(db, team.id);
-
-    if (acknowledgementClaimed) {
-      try {
-        const leader = team.members.find((member) => member.isLeader);
-        const config = await db.eventConfig.findUnique({ where: { id: "singleton" } });
-        if (!leader?.email) {
-          emailResult = {
-            success: false,
-            message: "Leader email is missing",
-            provider: "configuration",
-          };
-        } else {
-          emailResult = await sendRegistrationAcknowledgementEmail({
-            to: leader.email,
-            leaderName: leader.fullName,
-            teamName: team.teamName,
-            contactEmail: config?.contactEmail,
-          });
-        }
-        if (!emailResult.success) {
-          console.error("[registration-acknowledgement] delivery failed", {
-            teamId: team.id,
-            provider: emailResult.provider,
-            message: emailResult.message,
-          });
-        }
-      } catch (err) {
-        console.error("[registration-acknowledgement] delivery failed", {
-          teamId: team.id,
-          provider: "configuration",
-          message: err instanceof Error ? err.message : "unknown error",
-        });
-      }
-    } else {
-      console.log("[registration-acknowledgement] duplicate suppressed", { teamId: team.id });
-    }
-
-    return NextResponse.json({ team, acknowledgementEmailSent: emailResult.success }, { status: 201 });
+    const acknowledgementEmailSent = await attemptRegistrationAcknowledgement(team.id);
+    return NextResponse.json({ team, acknowledgementEmailSent }, { status: 201 });
   } catch (err) {
     if (err instanceof Error && err.message === "TEAM_NAME_TAKEN") {
       return NextResponse.json(
@@ -191,8 +152,14 @@ export async function POST(req: Request) {
       );
     }
     // Surface our capacity/close errors as 403, otherwise default jsonError handling
-    if (err instanceof Error && (err.message === "Registrations are currently closed." || err.message === "Registration is full. All spots have been taken.")) {
-      return NextResponse.json({ error: err.message, code: err.message.includes("closed") ? "REG_CLOSED_MANUAL" : "REG_FULL" }, { status: 403 });
+    if (err instanceof Error && err.message === "EVENT_CONFIG_MISSING") {
+      return NextResponse.json({ error: "Registration is temporarily unavailable." }, { status: 503 });
+    }
+    if (err instanceof Error && (err.message === "Registrations are currently closed." || err.message === "Registration is closed." || err.message === "Registration is full. All spots have been taken.")) {
+      const code = err.message === "Registration is full. All spots have been taken."
+        ? "REG_FULL"
+        : err.message === "Registration is closed." ? "REG_CLOSED" : "REG_CLOSED_MANUAL";
+      return NextResponse.json({ error: err.message, code }, { status: 403 });
     }
     return jsonError(err);
   }
@@ -219,4 +186,3 @@ export async function GET(req: Request) {
     );
   }
 }
-

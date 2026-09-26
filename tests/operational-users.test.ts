@@ -51,7 +51,7 @@ describe("ensureOperationalUser", () => {
       email: "updated@example.com",
       password: "second-password",
       name: "Updated Coordinator",
-      role: "FOOD_ADMIN",
+      role: "COORDINATOR",
       database: state.database,
     });
 
@@ -62,9 +62,21 @@ describe("ensureOperationalUser", () => {
       username: "coordinator",
       email: "updated@example.com",
       name: "Updated Coordinator",
-      role: "FOOD_ADMIN",
+      role: "COORDINATOR",
     });
     expect(state.getRow().passwordHash).not.toBe(firstHash);
     expect(await bcrypt.compare("second-password", state.getRow().passwordHash)).toBe(true);
+  });
+
+  it("refuses to change the role of an account matched by bootstrap credentials", async () => {
+    const state = makeDatabase();
+    await ensureOperationalUser({
+      username: "operator", email: "operator@example.com", password: "first-password",
+      name: "Operator", role: "COORDINATOR", database: state.database,
+    });
+    await expect(ensureOperationalUser({
+      username: "operator", email: "operator@example.com", password: "second-password",
+      name: "Operator", role: "SUPER_ADMIN", database: state.database,
+    })).rejects.toThrow("refusing to change its role");
   });
 });

@@ -93,10 +93,12 @@ export async function POST(req: Request) {
 
       // If approved, generate registration ID + participant IDs + QR tokens
       if (wantApproved) {
-        const existingApproved = await tx.team.count({
-          where: { status: "APPROVED", registrationId: { not: null } },
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('hackmitten-registration-sequence'))`;
+        const allocatedIds = await tx.team.findMany({
+          where: { registrationId: { not: null } },
+          select: { registrationId: true },
         });
-        const seq = await nextRegistrationSequence(existingApproved);
+        const seq = nextRegistrationSequence(allocatedIds.map((row) => row.registrationId));
         const regId = generateRegistrationId(seq);
 
         await tx.team.update({

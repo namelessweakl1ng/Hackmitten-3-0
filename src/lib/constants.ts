@@ -58,11 +58,11 @@ export function generateParticipantId(regSeq: number, memberSeq: number): string
   return `${PARTICIPANT_ID_PREFIX}-${String(regSeq).padStart(5, "0")}-${String(memberSeq).padStart(2, "0")}`;
 }
 
-/**
- * Returns the next sequential registration number based on existing rows.
- * Starts at 480 so the public-facing sequence looks like a real ongoing event
- * rather than the very first team to register.
- */
-export async function nextRegistrationSequence(countExisting: number): Promise<number> {
-  return 480 + countExisting + 1;
+/** Allocate above every surviving public registration ID; 480 is the historical floor. */
+export function nextRegistrationSequence(registrationIds: Array<string | null>): number {
+  const last = registrationIds.reduce((max, id) => {
+    const match = id?.match(/^HM3-(\d+)$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 480);
+  return last + 1;
 }

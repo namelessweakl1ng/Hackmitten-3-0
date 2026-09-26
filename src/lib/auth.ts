@@ -4,12 +4,6 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { LOGIN_ROLE_MAP } from "@/lib/operational-users";
 
-// `trustHost` is a runtime option in NextAuth v4.24+ that lets NextAuth trust
-// the X-Forwarded-Host header (required when running behind Vercel's edge /
-// any TLS-terminating proxy). It's missing from the v4 type definitions, so
-// we add it via an intersection.
-type AuthOptionsWithTrustHost = NextAuthOptions & { trustHost?: boolean };
-
 type UserLike = {
   id: string;
   username: string;
@@ -64,7 +58,7 @@ export async function verifyPasswordAndRole({
   return roleMatchesSelectedRole(selectedRole, user.role);
 }
 
-export const authOptions: AuthOptionsWithTrustHost = {
+export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 7 }, // 7 days
   pages: {
     signIn: "/login",
@@ -133,7 +127,6 @@ export const authOptions: AuthOptionsWithTrustHost = {
   // Required at runtime — NextAuth throws in production if NEXTAUTH_SECRET is
   // missing. No dev fallback is provided here.
   secret: process.env.NEXTAUTH_SECRET,
-  trustHost: true,
 };
 
 // Type augmentation so role is visible on session.user

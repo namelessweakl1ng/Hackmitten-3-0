@@ -161,6 +161,7 @@ model Team {
   status         RegistrationStatus @default(DRAFT)
   college        String?
   registrationAcknowledgementAttemptedAt DateTime?
+  registrationAcknowledgementSentAt DateTime?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 

@@ -11,20 +11,13 @@ import { jsonError } from "@/lib/api-auth";
 export async function GET(_req: Request, { params }: { params: Promise<{ qrToken: string }> }) {
   try {
     const { qrToken } = await params;
-    if (!qrToken || qrToken.length < 8) {
+    if (!/^[a-f0-9]{48}$/i.test(qrToken)) {
       return NextResponse.json({ error: "Invalid pass token" }, { status: 400 });
     }
-    // Look up by qrToken (primary) or participantId (fallback)
-    let participant = await db.participant.findUnique({
+    const participant = await db.participant.findUnique({
       where: { qrToken },
       include: { team: true },
     });
-    if (!participant) {
-      participant = await db.participant.findUnique({
-        where: { participantId: qrToken },
-        include: { team: true },
-      });
-    }
     if (!participant) {
       return NextResponse.json({ error: "Pass not found" }, { status: 404 });
     }
@@ -39,7 +32,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ qrToken
         id: participant.id,
         fullName: participant.fullName,
         participantId: participant.participantId,
-        college: participant.college,
       },
       team: {
         teamName: participant.team.teamName,

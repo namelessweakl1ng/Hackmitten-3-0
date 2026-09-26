@@ -18,6 +18,7 @@ function validMember(name: string, email: string, isLeader?: boolean) {
     email,
     phone: "9876543210",
     college: "Test College",
+    degree: "Computer Science",
     ...(isLeader === undefined ? {} : { isLeader }),
   };
 }
@@ -223,6 +224,16 @@ describe("registrationSchema", () => {
     });
     expect(res.success).toBe(false);
   });
+
+  it("rejects a member without a degree", () => {
+    const member = validMember("Alice", "alice@gmail.com");
+    delete (member as Partial<typeof member>).degree;
+    const res = registrationSchema.safeParse({
+      teamName: "NODEGREE",
+      members: [member, validMember("Bob", "bob@gmail.com"), validMember("Carol", "carol@gmail.com")],
+    });
+    expect(res.success).toBe(false);
+  });
 });
 
 describe("paymentSubmissionSchema", () => {
@@ -246,7 +257,7 @@ describe("paymentSubmissionSchema", () => {
 
 describe("foodCheckInSchema", () => {
   it("accepts valid qrToken and mealId", () => {
-    const res = foodCheckInSchema.safeParse({ qrToken: "abc123def456", mealId: "m1" });
+    const res = foodCheckInSchema.safeParse({ qrToken: "a".repeat(48), mealId: "m1" });
     expect(res.success).toBe(true);
   });
   it("rejects short qrToken", () => {
@@ -254,7 +265,7 @@ describe("foodCheckInSchema", () => {
     expect(res.success).toBe(false);
   });
   it("rejects empty mealId", () => {
-    const res = foodCheckInSchema.safeParse({ qrToken: "abc123def456", mealId: "" });
+    const res = foodCheckInSchema.safeParse({ qrToken: "a".repeat(48), mealId: "" });
     expect(res.success).toBe(false);
   });
 });

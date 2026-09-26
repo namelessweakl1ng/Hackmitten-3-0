@@ -614,7 +614,7 @@ function DegreeField({
           }}
           className="mt-1 w-full bg-transparent border-b border-white/15 py-2 text-base text-white focus:border-[#B52A32] focus:outline-none transition-colors appearance-none cursor-pointer"
         >
-          <option value="" disabled className="bg-[#080808] text-[#A8A8A8]">Select degree (optional)</option>
+          <option value="" disabled className="bg-[#080808] text-[#A8A8A8]">Select degree</option>
           {DEGREE_OPTIONS.map((opt) => (
             <option key={opt} value={opt} className="bg-[#080808] text-white">
               {opt}

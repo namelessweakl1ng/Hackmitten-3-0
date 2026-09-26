@@ -10,7 +10,6 @@ type PassData = {
     id: string;
     fullName: string;
     participantId: string | null;
-    college: string;
   };
   team: {
     teamName: string;
@@ -98,7 +97,6 @@ export default function PassPage({ params }: { params: Promise<{ qrToken: string
     ctx.fillStyle = "#A8A8A8";
     ctx.font = "300 18px 'Inter', sans-serif";
     ctx.fillText(pass?.participant.participantId ?? "—", W / 2, 1180);
-    ctx.fillText(pass?.participant.college ?? "—", W / 2, 1210);
 
     // Verified badge
     if (pass?.verified) {
@@ -186,7 +184,7 @@ export default function PassPage({ params }: { params: Promise<{ qrToken: string
               <div className="mb-6">
                 <div className="mono text-[10px] uppercase tracking-widest text-[#A8A8A8] mb-1">Participant</div>
                 <div className="text-xl text-white font-semibold">{pass.participant.fullName}</div>
-                <div className="text-sm text-[#A8A8A8] mt-1">{pass.participant.participantId ?? "—"} · {pass.participant.college}</div>
+                <div className="text-sm text-[#A8A8A8] mt-1">{pass.participant.participantId ?? "—"}</div>
               </div>
 
               <div className="flex justify-center my-8">
