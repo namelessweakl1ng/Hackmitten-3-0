@@ -21,7 +21,6 @@ export async function GET() {
       perMealCounts,
       recentCheckIns,
       recentRegistrations,
-      totalSponsors,
     ] = await Promise.all([
       db.team.count(),
       db.team.count({ where: { status: RegistrationStatus.APPROVED } }),
@@ -54,7 +53,6 @@ export async function GET() {
           payment: { select: { status: true, transactionId: true } },
         },
       }),
-      db.sponsor.count({ where: { visible: true } }),
     ]);
 
     return NextResponse.json({
@@ -66,7 +64,6 @@ export async function GET() {
         rejectedPayments,
         totalParticipants,
         totalFoodCheckIns,
-        totalSponsors,
       },
       meals: perMealCounts.map((m) => ({
         id: m.id,

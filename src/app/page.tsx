@@ -5,15 +5,11 @@ import { useScrollProgress } from "@/components/three/use-scroll-progress";
 import { PublicNav } from "@/components/public/nav";
 import { Hero } from "@/components/sections/hero";
 import { About } from "@/components/sections/about";
-import { Timeline } from "@/components/sections/timeline";
 import { Gallery } from "@/components/sections/gallery";
 import { Coordinators } from "@/components/sections/coordinators";
 import { Sponsors } from "@/components/sections/sponsors";
 import { Venue } from "@/components/sections/venue";
-import { Winners } from "@/components/sections/winners";
 import { CTA } from "@/components/sections/cta";
-import { Footer } from "@/components/sections/footer";
-import { useQuery } from "@tanstack/react-query";
 import { Reveal } from "@/components/ui/reveal";
 
 // Black hole 3D scene — loaded client-side only, with SSR disabled
@@ -24,25 +20,6 @@ const SpaceScene = dynamic(
 
 export default function HomePage() {
   const { scrollProgress } = useScrollProgress();
-
-  // Check if winners mode is enabled
-  const { data: winnersData } = useQuery<{
-    visible: boolean;
-    winners: Array<{ id: string }>;
-  }>({
-    queryKey: ["winners"],
-    queryFn: async () => (await fetch("/api/winners")).json(),
-  });
-  const winnersMode =
-    winnersData?.visible === true &&
-    (winnersData.winners?.length ?? 0) > 0;
-
-  // Check hero visibility — when false, the Hero section is NOT rendered at all
-  const { data: configData } = useQuery<{ config: { heroVisible: boolean } }>({
-    queryKey: ["config"],
-    queryFn: async () => (await fetch("/api/config")).json(),
-  });
-  const heroVisible = configData?.config?.heroVisible !== false; // default true while loading
 
   return (
     <main className="relative min-h-screen bg-[#030303] text-white overflow-x-hidden">
@@ -62,53 +39,13 @@ export default function HomePage() {
 
       <div className="relative z-10">
         <PublicNav />
-        {/* Hero is conditionally rendered — when heroVisible=false, the section
-            is removed from the DOM entirely (not just hidden with CSS) */}
-        {heroVisible && <Hero />}
-
-        {winnersMode ? (
-          <Reveal>
-            <Winners />
-          </Reveal>
-        ) : (
-          <>
-            <Reveal>
-              <About />
-            </Reveal>
-
-            <Reveal delay={60}>
-              <Timeline />
-            </Reveal>
-
-            <Reveal delay={80}>
-              <Gallery />
-            </Reveal>
-
-            <Reveal delay={100}>
-              <Coordinators />
-            </Reveal>
-
-            <Reveal delay={80}>
-              <Sponsors />
-            </Reveal>
-
-            <Reveal delay={60}>
-              <Venue />
-            </Reveal>
-
-            <Reveal delay={80}>
-              <Winners />
-            </Reveal>
-
-            <Reveal delay={100}>
-              <CTA />
-            </Reveal>
-          </>
-        )}
-
-        <Reveal>
-          <Footer />
-        </Reveal>
+        <Hero />
+        <Reveal><About /></Reveal>
+        <Reveal delay={80}><Gallery /></Reveal>
+        <Reveal delay={100}><Coordinators /></Reveal>
+        <Reveal delay={80}><Sponsors /></Reveal>
+        <Reveal delay={60}><Venue /></Reveal>
+        <Reveal delay={100}><CTA /></Reveal>
       </div>
     </main>
   );

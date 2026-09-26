@@ -13,25 +13,6 @@ export const SPONSORS: StaticSponsor[] = [
     website: null,
     tier: "TITLE",
   },
-  {
-    name: "Sponsor 4",
-    logo: "/images/sponsors/logo2.png",
-    website: null,
-    tier: "TITLE",
-  },
-  {
-    name: "Sponsor 5",
-    logo: "/images/sponsors/logo1.png",
-    website: null,
-    tier: "TITLE",
-  },
-  {
-    name: "Sponsor 5",
-    logo: "/images/sponsors/logo3.png",
-    website: null,
-    tier: "TITLE",
-  },
-
   // CSE
   {
     name: "CSE",
@@ -51,34 +32,7 @@ export const SPONSORS: StaticSponsor[] = [
   },
 ];
 
-export function resolveSponsors(
-  databaseSponsors?: Array<{
-    id?: string;
-    name?: string | null;
-    logoUrl?: string | null;
-    websiteUrl?: string | null;
-    tier?: string | null;
-    customTier?: string | null;
-  }> | null
-) {
-  /*
-   * Use database sponsors when available.
-   */
-  if (databaseSponsors && databaseSponsors.length > 0) {
-    return databaseSponsors.map((s, index) => ({
-      id: s.id ?? `sponsor-${index}`,
-      name: s.name ?? "Sponsor",
-      logoUrl: s.logoUrl ?? "",
-      websiteUrl: s.websiteUrl ?? null,
-      tier: s.tier ?? "PARTNER",
-      customTier: s.customTier ?? null,
-      sortOrder: index,
-    }));
-  }
-
-  /*
-   * Otherwise use static sponsors.
-   */
+export function resolveSponsors() {
   return SPONSORS.map((s, index) => ({
     id: `static-sponsor-${index}`,
     name: s.name,

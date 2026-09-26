@@ -1,17 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-
-type EventConfig = {
-  collegeName: string;
-};
-
 export function Venue() {
-  const { data } = useQuery<{ config: EventConfig }>({
-    queryKey: ["config"],
-    queryFn: async () => (await fetch("/api/config")).json(),
-  });
-  const venue = data?.config?.collegeName || "MAHARAJA INSTITUTE OF TECHNOLOGY THANDAVAPURA";
 
   return (
     <section id="venue" className="relative py-16 md:py-24">
@@ -26,7 +15,7 @@ export function Venue() {
             <span className="text-[#A8A8A8]">EVENT HORIZON.</span>
           </h2>
           <p className="mt-4 text-sm md:text-base text-[#A8A8A8] max-w-xl">
-            {venue}
+            MAHARAJA INSTITUTE OF TECHNOLOGY THANDAVAPURA
           </p>
         </div>
 

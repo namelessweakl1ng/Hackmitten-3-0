@@ -13,7 +13,6 @@ type Stats = {
     rejectedPayments: number;
     totalParticipants: number;
     totalFoodCheckIns: number;
-    totalSponsors: number;
   };
   meals: { id: string; type: string; label: string; checkInCount: number }[];
   recentCheckIns: any[];
@@ -27,7 +26,6 @@ const STAT_CARDS = [
   { key: "verifiedPayments", label: "Verified Payments", icon: ShieldCheck },
   { key: "totalParticipants", label: "Total Participants", icon: Users },
   { key: "totalFoodCheckIns", label: "Food Check-ins", icon: UtensilsCrossed },
-  { key: "totalSponsors", label: "Sponsors", icon: CheckCircle2 },
 ] as const;
 
 const STATUS_COLORS: Record<string, string> = {

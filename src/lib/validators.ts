@@ -81,36 +81,6 @@ export const passwordChangeSchema = z
     }
   });
 
-export const phaseSchema = z.object({
-  name: z.string().min(2).max(100),
-  description: z.string().max(500).optional(),
-  startDate: z.string().min(1),
-  startTime: z.string().min(1),
-  endDate: z.string().optional(),
-  endTime: z.string().optional(),
-  sortOrder: z.number().int().min(0).default(0),
-  visible: z.boolean().default(true),
-});
-
-export const sponsorSchema = z.object({
-  name: z.string().min(2).max(100),
-  websiteUrl: z.string().url().optional().or(z.literal("")),
-  tier: z.enum(["TITLE", "PLATINUM", "GOLD", "SILVER", "PARTNER", "CUSTOM"]).default("PARTNER"),
-  customTier: z.string().max(60).optional(),
-  sortOrder: z.number().int().min(0).default(0),
-  visible: z.boolean().default(true),
-});
-
-export const winnerSchema = z.object({
-  position: z.number().int().min(0).max(99),
-  positionLabel: z.string().min(1).max(60),
-  teamName: z.string().min(2).max(100),
-  prize: z.string().max(60).optional(),
-  description: z.string().max(500).optional(),
-  sortOrder: z.number().int().min(0).default(0),
-  visible: z.boolean().default(true),
-});
-
 export const mealSchema = z.object({
   type: z.enum(["BREAKFAST", "LUNCH", "SNACKS", "DINNER", "CUSTOM"]).default("CUSTOM"),
   label: z.string().min(1).max(60),
@@ -120,22 +90,10 @@ export const mealSchema = z.object({
   enabled: z.boolean().default(true),
 });
 
-export const galleryItemSchema = z.object({
-  title: z.string().min(1).max(100),
-  caption: z.string().max(200).optional(),
-  year: z.string().min(1).max(20),
-  sortOrder: z.number().int().min(0).default(0),
-  visible: z.boolean().default(true),
-});
-
 export type RegistrationInput = z.infer<typeof registrationSchema>;
 export type MemberInput = z.infer<typeof memberSchema>;
 export type PaymentSubmissionInput = z.infer<typeof paymentSubmissionSchema>;
 export type FoodCheckInInput = z.infer<typeof foodCheckInSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type PasswordChangeInput = z.infer<typeof passwordChangeSchema>;
-export type PhaseInput = z.infer<typeof phaseSchema>;
-export type SponsorInput = z.infer<typeof sponsorSchema>;
-export type WinnerInput = z.infer<typeof winnerSchema>;
 export type MealInput = z.infer<typeof mealSchema>;
-export type GalleryItemInput = z.infer<typeof galleryItemSchema>;

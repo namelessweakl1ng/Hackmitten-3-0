@@ -27,7 +27,6 @@ const SECTION_LABEL: Record<string, string> = {
   GALLERY: "Gallery",
   SPONSOR: "Sponsor",
   COORDINATOR: "Coordinator",
-  WINNER: "Winner",
   MEAL: "Meal",
   TEAM: "Team",
   PAYMENT: "Payment",
@@ -117,7 +116,7 @@ export function ChangeHistoryViewer() {
           <AlertTriangle size={20} className="mx-auto text-[#A8A8A8] opacity-50 mb-3" />
           <div className="text-sm text-[#A8A8A8]">No changes recorded yet.</div>
           <div className="text-xs text-[#A8A8A8]/70 mt-1">
-            Changes you make to event settings, phases, gallery, sponsors, coordinators, winners, meals, teams, and payments will appear here.
+            Registration controls, meals, teams, and payments remain available in operational history.
           </div>
         </div>
       ) : (

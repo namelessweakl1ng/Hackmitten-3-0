@@ -1,27 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
 import { Countdown } from "./countdown";
 import { useEventState } from "@/components/auth/use-event-state";
 
-type EventConfig = {
-  heroHeading: string;
-  heroEdition: string;
-  heroSubtitle: string;
-  heroDescription: string;
-  heroCtaText: string;
-  heroCtaLink: string;
-  heroVisible: boolean;
-  eventDurationHours: number;
-};
-
 export function Hero() {
-  const { data } = useQuery<{ config: EventConfig }>({
-    queryKey: ["config"],
-    queryFn: async () => (await fetch("/api/config")).json(),
-  });
-  const cfg = data?.config;
   const eventState = useEventState();
   const regOpen = eventState.data?.registrationOpen ?? false; // fail closed while loading/error
   // Registration is "full" when state is REGISTRATION_OPEN (deadline not passed) but either
@@ -33,13 +16,13 @@ export function Hero() {
       (eventState.data.registrationCapacity > 0 &&
         eventState.data.currentCount >= eventState.data.registrationCapacity));
 
-  const heading = cfg?.heroHeading || "HACKMITTEN";
-  const edition = cfg?.heroEdition || "3.0";
-  const subtitle = cfg?.heroSubtitle || "IDEAS BEYOND THE HORIZON";
+  const heading = "HACKMITTEN";
+  const edition = "3.0";
+  const subtitle = "IDEAS BEYOND THE HORIZON | NATIONAL LEVEL HACKATHON";
   const subtitleLines = subtitle.split("|").map((s) => s.trim()).filter(Boolean);
   const description = "24 HOURS. BUILD. INNOVATE. CREATE.";
-  const ctaText = cfg?.heroCtaText || "REGISTER NOW";
-  const ctaLink = cfg?.heroCtaLink || "/register";
+  const ctaText = "REGISTER NOW";
+  const ctaLink = "/register";
 
   return (
     <section
@@ -52,7 +35,7 @@ export function Hero() {
         <div className="hero-reveal hero-reveal-delay-1 mb-6 flex items-center gap-3 flex-wrap justify-center">
           <span className="h-px w-8 md:w-10 bg-[#B52A32]" />
           <span className="mono text-[10px] md:text-xs uppercase tracking-[0.3em] text-[#A8A8A8] text-center">
-            {cfg?.eventDurationHours ?? 24} Hours 
+            24 Hours
           </span>
           <span className="h-px w-8 md:w-10 bg-[#B52A32]" />
         </div>

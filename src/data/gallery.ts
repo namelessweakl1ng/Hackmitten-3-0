@@ -16,17 +16,7 @@ export const GALLERY: StaticGalleryItem[] = [
   { image: "/images/gallery/gallery_a4fb0dba489f.jpg", title: "Archive 08" },
 ];
 
-export function resolveGalleryItems(databaseItems?: Array<{ id?: string; title?: string | null; caption?: string | null; imageUrl?: string | null; image?: string | null; year?: string | number | null }> | null) {
-  if (databaseItems && databaseItems.length > 0) {
-    return databaseItems.map((item, index) => ({
-      id: item.id ?? `gallery-${index}`,
-      title: item.title ?? `Archive ${String(index + 1).padStart(2, "0")}`,
-      caption: item.caption ?? null,
-      imageUrl: item.imageUrl ?? item.image ?? "/images/gallery/gallery_107ae5e9b38d.jpg",
-      year: item.year ? String(item.year) : "",
-    }));
-  }
-
+export function resolveGalleryItems() {
   return GALLERY.map((item, index) => ({
     id: `static-gallery-${index}`,
     title: item.title ?? `Archive ${String(index + 1).padStart(2, "0")}`,

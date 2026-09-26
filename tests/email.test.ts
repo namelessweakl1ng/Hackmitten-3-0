@@ -3,6 +3,8 @@ import { claimRegistrationAcknowledgement, releaseRegistrationAcknowledgementCla
 import {
   approvalEmailHtml,
   approvalEmailText,
+  rejectionEmailHtml,
+  rejectionEmailText,
   registrationAcknowledgementEmailHtml,
   registrationAcknowledgementEmailText,
   sendEmail,
@@ -22,73 +24,19 @@ const payload = {
   text: "approved",
 };
 
-describe("sendEmail", () => {
-  it("reports missing Resend configuration in production", async () => {
-    process.env.NODE_ENV = "production";
-    delete process.env.RESEND_API_KEY;
-    process.env.EMAIL_FROM = "Hackmitten <noreply@example.com>";
-
-    await expect(sendEmail(payload)).resolves.toEqual({
-      success: false,
-      message: "RESEND_API_KEY is not configured in production",
-      provider: "configuration",
-    });
+describe("SMTP mail configuration", () => {
+  it("fails closed when SMTP settings are incomplete", async () => {
+    for (const key of ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM"]) delete process.env[key];
+    await expect(sendEmail(payload)).resolves.toEqual({ success: false, message: "SMTP configuration is incomplete", provider: "configuration" });
   });
 
-  it("reports missing sender configuration in production", async () => {
-    process.env.NODE_ENV = "production";
-    process.env.RESEND_API_KEY = "re_test_key";
-    delete process.env.EMAIL_FROM;
-
-    await expect(sendEmail(payload)).resolves.toEqual({
-      success: false,
-      message: "EMAIL_FROM is not configured in production",
-      provider: "configuration",
-    });
-  });
-
-  it("uses the console fallback locally", async () => {
-    process.env.NODE_ENV = "development";
-    delete process.env.RESEND_API_KEY;
-    delete process.env.EMAIL_FROM;
-
-    await expect(sendEmail(payload)).resolves.toMatchObject({
-      success: true,
-      provider: "console",
-    });
-  });
-
-  it("reports a successful Resend delivery", async () => {
-    process.env.NODE_ENV = "production";
-    process.env.RESEND_API_KEY = "re_test_key";
-    process.env.EMAIL_FROM = "Hackmitten <noreply@example.com>";
-    let requestBody = "";
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (_input, init) => {
-      requestBody = String(init?.body ?? "");
-      return new Response(JSON.stringify({ id: "email_test_1" }), { status: 200 });
-    };
-
-    try {
-      await expect(sendEmail(payload)).resolves.toMatchObject({ success: true, provider: "resend" });
-      expect(requestBody).toContain('"to":["leader@example.com"]');
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-  });
-
-  it("reports a Resend failure", async () => {
-    process.env.NODE_ENV = "production";
-    process.env.RESEND_API_KEY = "re_test_key";
-    process.env.EMAIL_FROM = "Hackmitten <noreply@example.com>";
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () => new Response(JSON.stringify({ message: "provider rejected request" }), { status: 400 });
-
-    try {
-      await expect(sendEmail(payload)).resolves.toMatchObject({ success: false, provider: "resend" });
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+  it("does not report failed SMTP delivery as success", async () => {
+    process.env.SMTP_HOST = "127.0.0.1";
+    process.env.SMTP_PORT = "1";
+    process.env.SMTP_USER = "test";
+    process.env.SMTP_PASSWORD = "test-secret";
+    process.env.SMTP_FROM = "noreply@example.test";
+    await expect(sendEmail(payload)).resolves.toMatchObject({ success: false, provider: "smtp" });
   });
 });
 
@@ -105,6 +53,20 @@ describe("approval email templates", () => {
   it("contains the WhatsApp URL in both templates", () => {
     expect(approvalEmailHtml(opts)).toContain(opts.whatsappGroupUrl);
     expect(approvalEmailText(opts)).toContain(opts.whatsappGroupUrl);
+    for (const content of [approvalEmailHtml(opts), approvalEmailText(opts)]) {
+      expect(content).toContain("Your team has been successfully approved");
+      expect(content).toContain("officially accepted");
+      expect(content).toContain("MAHARAJA INSTITUTE OF TECHNOLOGY THANDAVAPURA");
+    }
+  });
+
+  it("states rejection and the team name without injecting an unapproved reason", () => {
+    const html = rejectionEmailHtml("Team <One>");
+    const text = rejectionEmailText("Team <One>");
+    for (const content of [html, text]) expect(content).toContain("registration was rejected");
+    expect(html).toContain("Team &lt;One&gt;");
+    expect(text).toContain("Team <One>");
+    expect(html + text).not.toContain("reason:");
   });
 
   it("targets the team leader email in the approval payload", () => {
@@ -121,28 +83,13 @@ describe("registration acknowledgement email", () => {
     contactEmail: "hodcse@mitt.edu.in",
   };
 
-  it("uses the received subject and sends only to the team leader", async () => {
-    process.env.NODE_ENV = "production";
-    process.env.RESEND_API_KEY = "re_test_key";
-    process.env.EMAIL_FROM = "Hackmitten <noreply@example.com>";
-    let requestBody = "";
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (_input, init) => {
-      requestBody = String(init?.body ?? "");
-      return new Response(JSON.stringify({ id: "email_registration_1" }), { status: 200 });
-    };
-
-    try {
-      await expect(sendRegistrationAcknowledgementEmail(opts)).resolves.toMatchObject({
-        success: true,
-        provider: "resend",
-      });
-      expect(requestBody).toContain('"to":["leader@gmail.com"]');
-      expect(requestBody).toContain("Hackmitten 3.0 — Registration Received");
-      expect(requestBody).not.toContain("Team Approved");
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+  it("uses the received subject and addresses the team leader", () => {
+    const html = registrationAcknowledgementEmailHtml(opts);
+    const text = registrationAcknowledgementEmailText(opts);
+    expect(text).toContain("Hackmitten 3.0");
+    expect(text).toContain("REGISTRATION RECEIVED");
+    expect(html).toContain("awaiting admin review");
+    expect(text).not.toContain("Your team has been approved");
   });
 
   it("contains received status and coordinator review wording without approval claims", () => {
@@ -160,8 +107,10 @@ describe("registration acknowledgement email", () => {
 
   it("keeps registration acknowledgement failure non-fatal", async () => {
     process.env.NODE_ENV = "production";
-    delete process.env.RESEND_API_KEY;
-    process.env.EMAIL_FROM = "Hackmitten <noreply@example.com>";
+    delete process.env.SMTP_HOST;
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASSWORD;
+    delete process.env.SMTP_FROM;
 
     await expect(sendRegistrationAcknowledgementEmail(opts)).resolves.toMatchObject({
       success: false,
@@ -169,26 +118,32 @@ describe("registration acknowledgement email", () => {
     });
   });
 
-  it("claims an acknowledgement only once across retries", async () => {
+  it("leases acknowledgements and caps delivery attempts at three", async () => {
     let claimedAt: Date | null = null;
+    let attempts = 0;
     const client = {
       team: {
-        updateMany: async ({ data }: { data: { registrationAcknowledgementAttemptedAt: Date | null } }) => {
-          if (data.registrationAcknowledgementAttemptedAt === null) {
-            claimedAt = null;
+        updateMany: async ({ where, data }: { where: { registrationAcknowledgementAttemptCount?: { lt: number }; OR: Array<{ registrationAcknowledgementAttemptedAt: null | { lt: Date } }> }; data: { registrationAcknowledgementAttemptedAt: Date | null; registrationAcknowledgementAttemptCount?: { increment: number } } }) => {
+          if (data.registrationAcknowledgementAttemptCount?.increment) {
+            if (attempts >= (where.registrationAcknowledgementAttemptCount?.lt ?? Infinity)) return { count: 0 };
+            const expiredBefore = where.OR[1].registrationAcknowledgementAttemptedAt;
+            if (claimedAt && (expiredBefore === null || claimedAt >= expiredBefore.lt)) return { count: 0 };
+            claimedAt = data.registrationAcknowledgementAttemptedAt;
+            attempts++;
             return { count: 1 };
           }
-          if (claimedAt) return { count: 0 };
-          claimedAt = data.registrationAcknowledgementAttemptedAt;
           return { count: 1 };
         },
       },
     };
 
-    await expect(claimRegistrationAcknowledgement(client, "team-1")).resolves.toBe(true);
-    await expect(claimRegistrationAcknowledgement(client, "team-1")).resolves.toBe(false);
+    const firstTime = new Date(Date.now() - 20 * 60 * 1000);
+    await expect(claimRegistrationAcknowledgement(client, "team-1", firstTime)).resolves.toBe(true);
+    await expect(claimRegistrationAcknowledgement(client, "team-1", firstTime)).resolves.toBe(false);
     const attemptTime = claimedAt!;
     await releaseRegistrationAcknowledgementClaim(client, "team-1", attemptTime);
-    await expect(claimRegistrationAcknowledgement(client, "team-1")).resolves.toBe(true);
+    await expect(claimRegistrationAcknowledgement(client, "team-1", new Date(attemptTime.getTime() + 11 * 60 * 1000))).resolves.toBe(true);
+    await expect(claimRegistrationAcknowledgement(client, "team-1", new Date(attemptTime.getTime() + 22 * 60 * 1000))).resolves.toBe(true);
+    await expect(claimRegistrationAcknowledgement(client, "team-1", new Date(attemptTime.getTime() + 33 * 60 * 1000))).resolves.toBe(false);
   });
 });

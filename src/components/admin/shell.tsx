@@ -7,8 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import {
   LayoutDashboard, Users, UtensilsCrossed, ScrollText, LogOut, Home,
-  Settings, Calendar, Image as ImageIcon, Trophy, Building2,
-  KeyRound, UserCog, RotateCcw, UserCircle, UsersRound,
+  Settings, KeyRound, UserCog, RotateCcw, UsersRound,
 } from "lucide-react";
 
 const NAV: { label: string; href: string; roles: string[]; icon: any; superAdminOnly?: boolean }[] = [
@@ -18,11 +17,6 @@ const NAV: { label: string; href: string; roles: string[]; icon: any; superAdmin
   { label: "Food Check-ins", href: "/admin/food", roles: ["SUPER_ADMIN"], icon: UtensilsCrossed },
   { label: "Audit Log", href: "/admin/audit", roles: ["SUPER_ADMIN"], icon: ScrollText },
   { label: "Event Settings", href: "/admin/settings", roles: ["SUPER_ADMIN"], icon: Settings, superAdminOnly: true },
-  { label: "Timeline", href: "/admin/timeline", roles: ["SUPER_ADMIN"], icon: Calendar, superAdminOnly: true },
-  { label: "Gallery", href: "/admin/gallery", roles: ["SUPER_ADMIN"], icon: ImageIcon, superAdminOnly: true },
-  { label: "Coordinators", href: "/admin/coordinators", roles: ["SUPER_ADMIN"], icon: UserCircle, superAdminOnly: true },
-  { label: "Sponsors", href: "/admin/sponsors", roles: ["SUPER_ADMIN"], icon: Building2, superAdminOnly: true },
-  { label: "Winners", href: "/admin/winners", roles: ["SUPER_ADMIN"], icon: Trophy, superAdminOnly: true },
   { label: "Meals", href: "/admin/meals", roles: ["SUPER_ADMIN", "FOOD_ADMIN"], icon: UtensilsCrossed },
   { label: "Change History", href: "/admin/change-history", roles: ["SUPER_ADMIN"], icon: RotateCcw, superAdminOnly: true },
   { label: "Credentials", href: "/admin/credentials", roles: ["SUPER_ADMIN"], icon: KeyRound, superAdminOnly: true },

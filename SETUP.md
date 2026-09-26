@@ -82,7 +82,7 @@ NEXTAUTH_URL=https://hackmitten.example.org
 NEXTAUTH_SECRET=<generated-cryptographic-secret>
 ```
 
-Set `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `HM3_BERSERK_SECRET` only for initial bootstrap or an explicitly planned credential reconciliation. Add `RESEND_API_KEY` and `EMAIL_FROM` if outbound email is configured. Protect the file and rotate credentials using the operator's secret-management process.
+For first bootstrap, set real emails and unique passwords for the preset admin, coordinator, and food-admin usernames in `.env.example`, plus `HM3_BERSERK_SECRET`. The bootstrap creates all three users with bcrypt hashes; do not put plaintext passwords in Git or logs. Re-run only for an explicitly planned credential reconciliation. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` in this protected runtime file. For Gmail-compatible SMTP, use a Google account with 2-Step Verification enabled, create a Gmail App Password, then configure those SMTP values here. Never put the app password in Git. Port 587 uses STARTTLS; port 465 uses implicit TLS. Protect this file and rotate credentials through the operator's secret-management process.
 
 ## 6. Build, artifact, and offline transfer
 
@@ -91,11 +91,14 @@ On a Linux build host with the locked dependencies available:
 ```sh
 bun install --frozen-lockfile
 bun run db:validate
+bun run db:generate
 bun run lint
 bun run typecheck
 bun test
 bun run build
 ```
+
+`db:generate` and `build` are build-time operations. `build` compiles the app and prepares the standalone artifact; it does not connect to production PostgreSQL, migrate, or bootstrap accounts. `db:migrate:deploy` and `db:bootstrap` are separate, explicit runtime operations.
 
 Build does not migrate or bootstrap a database. The runtime directory is `.next/standalone/`; it includes `server.js`, traced runtime modules, `.next/static`, and static public files. The preparation script excludes the old `public/uploads` directory. Never place `.env` or private storage in the build context/archive.
 

@@ -1,6 +1,5 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import {
   ChevronDown,
   Github,
@@ -28,26 +27,7 @@ type Coordinator = {
 };
 
 export function Coordinators() {
-  const { data, error } = useQuery<{ coordinators: Coordinator[] }>({
-    queryKey: ["coordinators"],
-    queryFn: async () => {
-      const response = await fetch("/api/coordinators");
-
-      if (!response.ok) {
-        throw new Error("Failed to load coordinators");
-      }
-
-      return response.json();
-    },
-  });
-
-  const databaseCoordinators = data?.coordinators ?? [];
-
-  const coordinators: Coordinator[] = error
-    ? []
-    : databaseCoordinators.length > 0
-      ? databaseCoordinators
-      : COORDINATORS.map((c, index) => ({
+  const coordinators: Coordinator[] = COORDINATORS.map((c, index) => ({
           id: `static-coordinator-${index}`,
           name: c.name,
           role: c.role,
@@ -60,7 +40,7 @@ export function Coordinators() {
           linkedinUrl: null,
           githubUrl: null,
           isLead: c.isLead ?? false,
-        }));
+  }));
 
   /*
    * ============================================================

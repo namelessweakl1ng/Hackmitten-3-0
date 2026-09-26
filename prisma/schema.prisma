@@ -39,101 +39,25 @@ model User {
   verifiedPayments   Payment[]
   changeHistory      ChangeHistory[]     @relation("ChangeHistoryChangedBy")
   rolledBackChanges  ChangeHistory[]     @relation("ChangeHistoryRolledBackBy")
-  coordinatorProfile CoordinatorProfile?
 
   @@index([role])
   @@index([username])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EVENT CONFIGURATION — single-row table (extensively expanded)
+// EVENT CONFIGURATION — registration controls only
 // ─────────────────────────────────────────────────────────────────────────────
 
 model EventConfig {
-  id String @id @default("singleton")
-
-  // Basics
-  eventName   String @default("Hackmitten 3.0")
-  edition     String @default("3.0")
-  tagline     String @default("IDEAS BEYOND THE HORIZON")
-  description String @default("24 hours. Real problems. Limitless possibilities.")
-
-  // Event timing (ISO date strings + HH:mm time + IANA timezone)
-  eventStartDate     String @default("")
-  eventStartTime     String @default("09:00")
-  eventEndDate       String @default("")
-  eventEndTime       String @default("09:00")
-  eventTimezone      String @default("Asia/Kolkata")
-  eventDurationHours Int    @default(24)
-
-  // Registration
-  registrationDeadline String  @default("") // ISO datetime string
-  registrationFee      String  @default("₹1,000")
-  prizePool            String  @default("₹1,00,000")
-  // Registration capacity & manual open/close toggle
-  registrationCapacity Int     @default(60)
-  registrationsOpen    Boolean @default(true)
-
-  // Hero
-  heroHeading     String  @default("HACKMITTEN")
-  heroEdition     String  @default("3.0")
-  heroSubtitle    String  @default("IDEAS BEYOND THE HORIZON")
-  heroDescription String  @default("24 hours. Real problems. Limitless possibilities.")
-  heroCtaText     String  @default("REGISTER NOW")
-  heroCtaLink     String  @default("/register")
-  heroVisible     Boolean @default(true)
-
-  // About
-  aboutHeading      String @default("BUILD. BREAK. REBUILD.")
-  aboutDescription  String @default("Hackmitten is not a hackathon. It is a descent into the unknown — a place where ideas cross the event horizon and emerge as something built, broken, and rebuilt into existence.")
-  aboutStatDuration String @default("24")
-  aboutStatTeamSize String @default("3—4")
-  aboutStatFee      String @default("₹1,000")
-  aboutStatPrize    String @default("₹1,00,000")
-  aboutStatVenue    String @default("MAHARAJA INSTITUTE OF TECHNOLOGY THANDAVAPURA")
-
-  // Footer
-  footerText     String @default("SEE YOU AT THE EVENT HORIZON.")
-  collegeName    String @default("MAHARAJA INSTITUTE OF TECHNOLOGY THANDAVAPURA")
-  collegeLogoUrl String @default("")
-  contactEmail   String @default("hodcse@mitt.edu.in")
-
-  // Payment
-  upiId    String @default("hackmitten@upi")
-  upiQrUrl String @default("")
-
-  // Winners
-  winnersVisible    Boolean @default(false)
-  winnersHeading    String  @default("THE MISSION IS COMPLETE.")
-  winnersSubheading String  @default("MEET THE WINNERS.")
-
-  // Social links (JSON-encoded)
-  socialLinks String @default("{}")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default("singleton")
+  registrationEnabled Boolean @default(true)
+  registrationLimit  Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HACKATHON PHASES — configurable timeline
-// ─────────────────────────────────────────────────────────────────────────────
 
-model HackathonPhase {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  startDate   String // ISO date
-  startTime   String // HH:mm
-  endDate     String?
-  endTime     String?
-  sortOrder   Int      @default(0)
-  visible     Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([sortOrder])
-  @@index([visible])
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REGISTRATION DOMAIN
@@ -161,7 +85,10 @@ model Team {
   status         RegistrationStatus @default(DRAFT)
   college        String?
   registrationAcknowledgementAttemptedAt DateTime?
+  registrationAcknowledgementAttemptCount Int @default(0)
   registrationAcknowledgementSentAt DateTime?
+  approvalEmailSentAt DateTime?
+  rejectionEmailSentAt DateTime?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
@@ -276,96 +203,13 @@ model FoodCheckIn {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COORDINATORS, GALLERY, SPONSORS, WINNERS
-// ─────────────────────────────────────────────────────────────────────────────
 
-enum CoordinatorType {
-  STUDENT
-  FACULTY
-}
 
-model CoordinatorProfile {
-  id          String          @id @default(cuid())
-  userId      String?         @unique
-  user        User?           @relation(fields: [userId], references: [id])
-  name        String
-  role        String
-  department  String?
-  type        CoordinatorType @default(STUDENT)
-  phone       String?
-  email       String?
-  photoUrl    String?
-  linkedinUrl String?
-  githubUrl   String?
-  isLead      Boolean         @default(false)
-  sortOrder   Int             @default(0)
-  visible     Boolean         @default(true)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
 
-  @@index([type])
-  @@index([visible])
-}
 
-model GalleryItem {
-  id        String   @id @default(cuid())
-  title     String
-  caption   String?
-  imageUrl  String
-  year      String   @default("2024")
-  sortOrder Int      @default(0)
-  visible   Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  @@index([year])
-  @@index([sortOrder])
-  @@index([visible])
-}
 
-enum SponsorTier {
-  TITLE
-  PLATINUM
-  GOLD
-  SILVER
-  PARTNER
-  CUSTOM
-}
 
-model Sponsor {
-  id         String      @id @default(cuid())
-  name       String
-  logoUrl    String
-  websiteUrl String?
-  tier       SponsorTier @default(PARTNER)
-  customTier String?
-  sortOrder  Int         @default(0)
-  visible    Boolean     @default(true)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-
-  @@index([tier])
-  @@index([visible])
-  @@index([sortOrder])
-}
-
-model Winner {
-  id            String   @id @default(cuid())
-  position      Int // 1, 2, 3, ... (0 = special mention)
-  positionLabel String   @default("1st Place") // "1st Place", "Special Mention", etc.
-  teamName      String
-  prize         String?
-  description   String?
-  imageUrl      String?
-  sortOrder     Int      @default(0)
-  visible       Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@index([position])
-  @@index([visible])
-  @@index([sortOrder])
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUDIT LOG

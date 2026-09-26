@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Users, Crown, X, Download, UtensilsCrossed, Check, Clock, FileSpreadsheet } from "lucide-react";
 import QRCode from "qrcode";
-import { csvDocument } from "@/lib/csv";
 
 type ApprovedTeam = {
   id: string;
@@ -96,7 +95,7 @@ export function CoordinatorPortal() {
                 />
               </div>
               <button
-                onClick={() => downloadTeamsCSV(teams)}
+                onClick={downloadTeamsCSV}
                 className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2.5 text-xs text-white hover:border-[#B52A32] hover:bg-white/5 transition-all whitespace-nowrap"
                 title="Download teams as CSV"
               >
@@ -342,31 +341,9 @@ function MealConsumptionView() {
   );
 }
 
-// Download teams as CSV for manual verification
-export function downloadTeamsCSV(teams: ApprovedTeam[]) {
-  const rows: string[][] = [["Registration ID", "Team Name", "College", "Member Name", "Member College", "Degree", "Participant ID", "Is Leader"]];
-  for (const team of teams) {
-    for (const m of team.members) {
-      rows.push([
-        team.registrationId ?? "",
-        team.teamName,
-        team.college ?? "",
-        m.fullName,
-        m.college,
-        m.degree ?? "",
-        m.participantId ?? "",
-        m.isLeader ? "Yes" : "No",
-      ]);
-    }
-  }
-  const csv = csvDocument(rows);
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `hackmitten-teams-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+// The authorized server export reads complete team/member/payment rows from PostgreSQL.
+export function downloadTeamsCSV() {
+  window.location.assign("/api/coordinator/teams/export");
 }
 async function downloadParticipantQR(fullName: string, qrToken: string) {
   // Generate QR code data URL from the opaque token (this is what the scanner reads)

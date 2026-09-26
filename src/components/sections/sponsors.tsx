@@ -1,6 +1,5 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { resolveSponsors } from "@/data/sponsors";
 
 type Sponsor = {
@@ -21,22 +20,7 @@ type Sponsor = {
 };
 
 export function Sponsors() {
-  const { data, error } = useQuery<{ sponsors: Sponsor[] }>({
-    queryKey: ["sponsors"],
-    queryFn: async () => {
-      const response = await fetch("/api/sponsors");
-
-      if (!response.ok) {
-        throw new Error("Failed to load sponsors");
-      }
-
-      return response.json();
-    },
-  });
-
-  const sponsors = resolveSponsors(
-    error ? null : data?.sponsors ?? undefined
-  ) as Sponsor[];
+  const sponsors = resolveSponsors() as Sponsor[];
 
   if (sponsors.length === 0) {
     return null;

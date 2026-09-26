@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { resolveGalleryItems } from "@/data/gallery";
 
@@ -14,16 +13,7 @@ type GalleryItem = {
 };
 
 export function Gallery() {
-  const { data, error } = useQuery<{ items: GalleryItem[] }>({
-    queryKey: ["gallery"],
-    queryFn: async () => {
-      const r = await fetch("/api/gallery");
-      if (!r.ok) throw new Error("Failed to load gallery");
-      return r.json();
-    },
-  });
-
-  const items: GalleryItem[] = resolveGalleryItems(error ? null : data?.items ?? undefined);
+  const items: GalleryItem[] = resolveGalleryItems();
 
   const [currAngle, setCurrAngle] = useState(0);
   const [vw, setVw] = useState(375);

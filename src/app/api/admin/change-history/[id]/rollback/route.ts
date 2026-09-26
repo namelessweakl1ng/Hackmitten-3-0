@@ -13,8 +13,7 @@ import type { ChangeHistorySection } from "@prisma/client";
  *
  * The original entry is marked rolledBack=true.
  *
- * Supported sections: EVENT_CONFIG, HERO, ABOUT, PHASE, GALLERY, SPONSOR,
- * COORDINATOR, WINNER, MEAL, TEAM, PAYMENT.
+ * Supported sections: registration controls, MEAL, TEAM, PAYMENT.
  */
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -100,19 +99,7 @@ function safeParse(s: string | null): any {
 async function fetchCurrentState(section: ChangeHistorySection, entityId: string, _entityType: string): Promise<any> {
   switch (section) {
     case "EVENT_CONFIG":
-    case "HERO":
-    case "ABOUT":
       return await db.eventConfig.findUnique({ where: { id: "singleton" } });
-    case "PHASE":
-      return await db.hackathonPhase.findUnique({ where: { id: entityId } });
-    case "GALLERY":
-      return await db.galleryItem.findUnique({ where: { id: entityId } });
-    case "SPONSOR":
-      return await db.sponsor.findUnique({ where: { id: entityId } });
-    case "COORDINATOR":
-      return await db.coordinatorProfile.findUnique({ where: { id: entityId } });
-    case "WINNER":
-      return await db.winner.findUnique({ where: { id: entityId } });
     case "MEAL":
       return await db.meal.findUnique({ where: { id: entityId } });
     case "TEAM":
@@ -135,24 +122,10 @@ async function applyRestore(section: ChangeHistorySection, entityId: string, ent
 
   switch (section) {
     case "EVENT_CONFIG":
-    case "HERO":
-    case "ABOUT":
-      await db.eventConfig.update({ where: { id: "singleton" }, data: restored });
-      break;
-    case "PHASE":
-      await db.hackathonPhase.update({ where: { id: entityId }, data: restored });
-      break;
-    case "GALLERY":
-      await db.galleryItem.update({ where: { id: entityId }, data: restored });
-      break;
-    case "SPONSOR":
-      await db.sponsor.update({ where: { id: entityId }, data: restored });
-      break;
-    case "COORDINATOR":
-      await db.coordinatorProfile.update({ where: { id: entityId }, data: restored });
-      break;
-    case "WINNER":
-      await db.winner.update({ where: { id: entityId }, data: restored });
+      await db.eventConfig.update({ where: { id: "singleton" }, data: {
+        registrationEnabled: restored.registrationEnabled ?? restored.registrationsOpen,
+        registrationLimit: restored.registrationLimit ?? (restored.registrationCapacity > 0 ? restored.registrationCapacity : null),
+      } });
       break;
     case "MEAL":
       await db.meal.update({ where: { id: entityId }, data: restored });
@@ -192,26 +165,6 @@ async function restoreDeletedRow(section: ChangeHistorySection, previousStateJso
   // Don't try to recreate with the original cuid (could collide). Use a new id.
   const { id: _ignored, ...data } = previousState;
   switch (section) {
-    case "PHASE": {
-      const r = await db.hackathonPhase.create({ data });
-      return r.id;
-    }
-    case "GALLERY": {
-      const r = await db.galleryItem.create({ data });
-      return r.id;
-    }
-    case "SPONSOR": {
-      const r = await db.sponsor.create({ data });
-      return r.id;
-    }
-    case "COORDINATOR": {
-      const r = await db.coordinatorProfile.create({ data });
-      return r.id;
-    }
-    case "WINNER": {
-      const r = await db.winner.create({ data });
-      return r.id;
-    }
     case "MEAL": {
       const r = await db.meal.create({ data });
       return r.id;

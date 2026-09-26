@@ -323,7 +323,11 @@ export function StepDetails() {
   );
 }
 
-// ─── STEP 3: PAYMENT (config-driven fee + UPI) ────────────────────────────────
+// ─── STEP 3: PAYMENT ─────────────────────────────────────────────────────────
+
+const REGISTRATION_FEE = "₹1,000";
+const OFFICIAL_UPI_ID = "hackmitten@upi";
+const PAYMENT_QR = "/images/QRcode/payment-qr.png";
 
 export function StepPayment() {
   const {
@@ -336,13 +340,8 @@ export function StepPayment() {
     setServerError, setSubmitting,
   } = useRegisterStore();
 
-  const { data: cfgData } = useQuery<{ config: any }>({
-    queryKey: ["config"],
-    queryFn: async () => (await fetch("/api/config")).json(),
-  });
-  const cfg = cfgData?.config;
-  const fee = cfg?.registrationFee ?? "₹1,000";
-  const qrUrl = cfg?.upiQrUrl || "/images/QRcode/payment-qr.png";
+  const fee = REGISTRATION_FEE;
+  const qrUrl = PAYMENT_QR;
 
   const validTxn = transactionId.trim().length >= 4 && transactionId.trim().length <= 100;
   const valid = validTxn && screenshot !== null;
@@ -416,11 +415,11 @@ export function StepPayment() {
               UPI ID
             </div>
             <div className="font-mono text-sm md:text-base text-[#B52A32] select-all break-all">
-              {cfg?.upiId ?? "—"}
+              {OFFICIAL_UPI_ID}
             </div>
             <button
               onClick={() => {
-                if (cfg?.upiId) navigator.clipboard?.writeText(cfg.upiId);
+                navigator.clipboard?.writeText(OFFICIAL_UPI_ID);
               }}
               className="mt-2 text-xs text-[#A8A8A8] hover:text-white transition-colors min-h-[36px]"
             >

@@ -8,7 +8,7 @@ const PRIVATE_UPLOAD_ROOT = path.resolve(process.env.HM3_PRIVATE_UPLOAD_DIR || p
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const PARTICIPANT_IMAGE_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_SIZE = 8 * 1024 * 1024;
-export const MAX_PARTICIPANT_IMAGE_SIZE = 1_048_576;
+export const MAX_PARTICIPANT_IMAGE_SIZE = 512_000;
 
 export class UploadError extends Error {
   statusCode = 400;

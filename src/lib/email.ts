@@ -1,95 +1,31 @@
-/**
- * Email system for Hackmitten 3.0.
- *
- * Sends the team leader's approval email when their team is approved.
- *
- * Provider priority:
- *   1. Resend in production.
- *   2. Console logging in local development only.
- *
- * Always returns { success, message, provider } for tracking.
- */
+/** SMTP mail transport and Hackmitten registration templates. */
+import nodemailer from "nodemailer";
 
-interface EmailPayload {
-  to: string;
-  subject: string;
-  html: string;
-  text: string;
-}
-
-export interface EmailResult {
-  success: boolean;
-  message: string;
-  provider: "resend" | "console" | "configuration";
-}
+interface EmailPayload { to: string; subject: string; html: string; text: string }
+export interface EmailResult { success: boolean; message: string; provider: "smtp" | "configuration" }
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>'"]/g, (character) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "'": "&#39;",
-    '"': "&quot;",
-  })[character] ?? character);
+  return value.replace(/[&<>\'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", "\"": "&quot;" })[character] ?? character);
 }
 
-/**
- * Send an email. Production requires both Resend and a configured sender.
- */
 export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
-  const isProduction = process.env.NODE_ENV === "production";
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM?.trim();
-
-  if (!resendApiKey) {
-    if (isProduction) {
-      return { success: false, message: "RESEND_API_KEY is not configured in production", provider: "configuration" };
-    }
-    console.log("[email] development console fallback", { to: payload.to, subject: payload.subject });
-    return { success: true, message: "Email logged in development (RESEND_API_KEY not configured)", provider: "console" };
+  const host = process.env.SMTP_HOST?.trim();
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER?.trim();
+  const password = process.env.SMTP_PASSWORD;
+  const from = process.env.SMTP_FROM?.trim();
+  if (!host || !Number.isInteger(port) || port < 1 || port > 65535 || !user || !password || !from) {
+    return { success: false, message: "SMTP configuration is incomplete", provider: "configuration" };
   }
-
-  if (!fromAddress) {
-    if (isProduction) {
-      return { success: false, message: "EMAIL_FROM is not configured in production", provider: "configuration" };
-    }
-    console.log("[email] development console fallback", { to: payload.to, subject: payload.subject });
-    return { success: true, message: "Email logged in development (EMAIL_FROM not configured)", provider: "console" };
+  try {
+    const transport = nodemailer.createTransport({ host, port, secure: port === 465, requireTLS: port !== 465,
+      auth: { user, pass: password }, connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 20_000 });
+    await transport.sendMail({ from, to: payload.to, subject: payload.subject, html: payload.html, text: payload.text });
+    return { success: true, message: "Email accepted by SMTP server", provider: "smtp" };
+  } catch (error) {
+    console.error("[email] SMTP delivery failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
+    return { success: false, message: "SMTP delivery failed", provider: "smtp" };
   }
-
-  // ─── Resend provider ─────────────────────────────────────────────────
-  {
-    try {
-      // Lazy import so the dependency is only loaded when actually needed.
-      const { Resend } = await import("resend");
-      const resend = new Resend(resendApiKey);
-      const { data, error } = await resend.emails.send({
-        from: fromAddress,
-        to: [payload.to],
-        subject: payload.subject,
-        html: payload.html,
-        text: payload.text,
-      });
-      if (error) {
-        return { success: false, message: `Resend error: ${error.message}`, provider: "resend" };
-      }
-      return { success: true, message: `Email sent via Resend (${data?.id ?? "—"})`, provider: "resend" };
-    } catch (err) {
-      return {
-        success: false,
-        message: `Failed to send via Resend: ${err instanceof Error ? err.message : "unknown"}`,
-        provider: "resend",
-      };
-    }
-  }
-
-  // ─── Dev mode (console logging) ───────────────────────────────────────
-  console.log("\n📧 EMAIL (dev mode — not actually sent)");
-  console.log("  To:", payload.to);
-  console.log("  Subject:", payload.subject);
-  console.log("  Text:", payload.text.slice(0, 200));
-  console.log("");
-  return { success: true, message: "Email logged (dev mode — no RESEND_API_KEY configured)", provider: "console" };
 }
 
 export function registrationAcknowledgementEmailHtml(opts: {
@@ -127,7 +63,7 @@ export function registrationAcknowledgementEmailHtml(opts: {
                 <tr><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A8A8A8;">TEAM</td><td style="padding:16px 20px;font-size:16px;color:#F2F2F2;font-weight:600;text-align:right;">${teamName}</td></tr>
                 <tr><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A8A8A8;border-top:1px solid rgba(255,255,255,0.05);">REGISTRATION STATUS</td><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:16px;color:#B52A32;font-weight:600;text-align:right;border-top:1px solid rgba(255,255,255,0.05);">RECEIVED</td></tr>
               </table>
-              <p style="margin:0 0 12px;">Your registration and payment details will be reviewed by the Hackmitten coordinators.</p>
+              <p style="margin:0 0 12px;">Your registration is awaiting admin review. Your registration and payment details will be reviewed by the Hackmitten coordinators.</p>
               <p style="margin:0 0 8px;color:#F2F2F2;font-weight:600;">Please note:</p>
               <ul style="margin:0 0 20px;padding-left:20px;">
                 <li>This email confirms that your registration has been received.</li>
@@ -165,7 +101,7 @@ Your team registration for Hackmitten 3.0 has been successfully received.
 Team: ${opts.teamName}
 Registration status: RECEIVED
 
-Your registration and payment details will be reviewed by the Hackmitten coordinators.
+Your registration is awaiting admin review. Your registration and payment details will be reviewed by the Hackmitten coordinators.
 
 Please note:
 - This email confirms that your registration has been received.
@@ -203,6 +139,12 @@ export function approvalEmailHtml(opts: {
   passUrl: string;
   whatsappGroupUrl: string;
 }): string {
+  const participantName = escapeHtml(opts.participantName);
+  const teamName = escapeHtml(opts.teamName);
+  const registrationId = escapeHtml(opts.registrationId);
+  const participantId = escapeHtml(opts.participantId);
+  const passUrl = escapeHtml(opts.passUrl);
+  const whatsappGroupUrl = escapeHtml(opts.whatsappGroupUrl);
   return `
 <!DOCTYPE html>
 <html>
@@ -219,24 +161,27 @@ export function approvalEmailHtml(opts: {
             <td style="padding:40px 40px 20px;text-align:center;">
               <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#B52A32;">HACKMITTEN 3.0</div>
               <h1 style="font-size:32px;font-weight:700;color:#F2F2F2;margin:16px 0 8px;">TEAM APPROVED.</h1>
-              <p style="font-size:14px;color:#A8A8A8;margin:0;">Your team has been approved for Hackmitten 3.0.</p>
+              <p style="font-size:14px;color:#A8A8A8;margin:0;">Your team has been successfully approved. You are officially accepted for the hackathon.</p>
             </td>
           </tr>
           <tr>
             <td style="padding:20px 40px;">
               <table width="100%" cellpadding="0" cellspacing="0" style="background:#151515;border-radius:8px;">
-                <tr><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A8A8A8;">TEAM</td><td style="padding:16px 20px;font-size:16px;color:#F2F2F2;font-weight:600;text-align:right;">${opts.teamName}</td></tr>
-                <tr><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A8A8A8;border-top:1px solid rgba(255,255,255,0.05);">REGISTRATION ID</td><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:16px;color:#B52A32;font-weight:600;text-align:right;border-top:1px solid rgba(255,255,255,0.05);">${opts.registrationId}</td></tr>
-                <tr><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A8A8A8;border-top:1px solid rgba(255,255,255,0.05);">PARTICIPANT</td><td style="padding:16px 20px;font-size:16px;color:#F2F2F2;font-weight:600;text-align:right;border-top:1px solid rgba(255,255,255,0.05);">${opts.participantName}</td></tr>
-                <tr><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A8A8A8;border-top:1px solid rgba(255,255,255,0.05);">PARTICIPANT ID</td><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:16px;color:#B52A32;font-weight:600;text-align:right;border-top:1px solid rgba(255,255,255,0.05);">${opts.participantId}</td></tr>
+                <tr><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A8A8A8;">TEAM</td><td style="padding:16px 20px;font-size:16px;color:#F2F2F2;font-weight:600;text-align:right;">${teamName}</td></tr>
+                <tr><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A8A8A8;border-top:1px solid rgba(255,255,255,0.05);">REGISTRATION ID</td><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:16px;color:#B52A32;font-weight:600;text-align:right;border-top:1px solid rgba(255,255,255,0.05);">${registrationId}</td></tr>
+                <tr><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A8A8A8;border-top:1px solid rgba(255,255,255,0.05);">TEAM LEADER</td><td style="padding:16px 20px;font-size:16px;color:#F2F2F2;font-weight:600;text-align:right;border-top:1px solid rgba(255,255,255,0.05);">${participantName}</td></tr>
+                <tr><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A8A8A8;border-top:1px solid rgba(255,255,255,0.05);">PARTICIPANT ID</td><td style="padding:16px 20px;font-family:'JetBrains Mono',monospace;font-size:16px;color:#B52A32;font-weight:600;text-align:right;border-top:1px solid rgba(255,255,255,0.05);">${participantId}</td></tr>
               </table>
             </td>
           </tr>
           <tr>
             <td style="padding:20px 40px 40px;text-align:center;">
-              <a href="${opts.whatsappGroupUrl}" style="display:inline-block;background:#B52A32;color:#F2F2F2;text-decoration:none;padding:14px 36px;border-radius:999px;font-size:14px;font-weight:600;letter-spacing:1px;">JOIN HACKMITTEN WHATSAPP GROUP</a>
+              <p>For further instructions, the team leader must join the official WhatsApp group:</p>
+              <a href="${whatsappGroupUrl}" style="display:inline-block;background:#B52A32;color:#F2F2F2;text-decoration:none;padding:14px 36px;border-radius:999px;font-size:14px;font-weight:600;letter-spacing:1px;">JOIN HACKMITTEN WHATSAPP GROUP</a>
+              <p><a href="${whatsappGroupUrl}">${whatsappGroupUrl}</a></p>
+              <p>Venue: MAHARAJA INSTITUTE OF TECHNOLOGY THANDAVAPURA</p>
               <p style="font-size:12px;color:#A8A8A8;margin:16px 0 0;">Please join the official team group and keep your registration details available for the event.</p>
-              <a href="${opts.passUrl}" style="display:inline-block;color:#F2F2F2;text-decoration:underline;margin-top:16px;font-size:13px;">VIEW YOUR DIGITAL PASS</a>
+              <a href="${passUrl}" style="display:inline-block;color:#F2F2F2;text-decoration:underline;margin-top:16px;font-size:13px;">VIEW YOUR DIGITAL PASS</a>
               <p style="font-size:12px;color:#A8A8A8;margin:16px 0 0;">Present the QR code on your pass at the food check-in counter.</p>
             </td>
           </tr>
@@ -250,6 +195,14 @@ export function approvalEmailHtml(opts: {
   `.trim();
 }
 
+export function rejectionEmailHtml(teamName: string): string {
+  return `<html><body><h1>Hackmitten 3.0</h1><p>Your team registration was rejected.</p><p>Team: ${escapeHtml(teamName)}</p></body></html>`;
+}
+
+export function rejectionEmailText(teamName: string): string {
+  return `Hackmitten 3.0\n\nYour team registration was rejected.\n\nTeam: ${teamName}`;
+}
+
 export function approvalEmailText(opts: {
   participantName: string;
   teamName: string;
@@ -260,14 +213,17 @@ export function approvalEmailText(opts: {
 }): string {
   return `HACKMITTEN 3.0 — TEAM APPROVED.
 
-Your team has been approved for Hackmitten 3.0.
+Your team has been successfully approved.
+You are officially accepted for the Hackmitten 3.0 hackathon.
 
 Team: ${opts.teamName}
 Registration ID: ${opts.registrationId}
-Participant: ${opts.participantName}
+Team leader: ${opts.participantName}
 Participant ID: ${opts.participantId}
 
 Join the official Hackmitten 3.0 WhatsApp group: ${opts.whatsappGroupUrl}
+
+Venue: MAHARAJA INSTITUTE OF TECHNOLOGY THANDAVAPURA
 
 View your digital pass: ${opts.passUrl}
 

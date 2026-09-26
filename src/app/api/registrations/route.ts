@@ -61,7 +61,8 @@ export async function POST(req: Request) {
     }
 
     const contentLength = Number(req.headers.get("content-length") ?? 0);
-    if (contentLength > 4 * 1_048_576 + 32_768) {
+    // Four optional participant images at 512,000 bytes each plus multipart fields.
+    if (contentLength > 4 * 512_000 + 32_768) {
       return NextResponse.json({ error: "Registration upload is too large." }, { status: 413 });
     }
     let body: unknown;
@@ -150,12 +151,12 @@ export async function POST(req: Request) {
       if (currentEventState.state !== "REGISTRATION_OPEN") {
         throw new Error("Registration is closed.");
       }
-      const capacity = cfg?.registrationCapacity ?? 60;
-      const open = cfg?.registrationsOpen ?? true;
+      const capacity = cfg.registrationLimit;
+      const open = cfg.registrationEnabled;
       if (!open) {
         throw new Error("Registrations are currently closed.");
       }
-      if (capacity > 0 && currentCount >= capacity) {
+      if (capacity !== null && currentCount >= capacity) {
         throw new Error("Registration is full. All spots have been taken.");
       }
 

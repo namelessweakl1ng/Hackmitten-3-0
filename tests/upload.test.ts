@@ -34,7 +34,7 @@ describe("image upload validation", () => {
     expect(detectImageMime(new Uint8Array([1, 2, 3, 4]))).toBeNull();
   });
 
-  it.each(imageCases.filter(([mime]) => mime !== "image/gif"))("accepts a valid participant %s image below 1 MiB", async (mime, bytes) => {
+  it.each(imageCases.filter(([mime]) => mime !== "image/gif"))("accepts a valid participant %s image below 500 KB", async (mime, bytes) => {
     const file = new File([new Uint8Array(bytes)], "photo.jpg", { type: mime });
     expect(await validateImageFile(file, { maxSize: MAX_PARTICIPANT_IMAGE_SIZE, allowedMime: new Set(["image/jpeg", "image/png", "image/webp"]) })).toBe(mime);
   });
@@ -43,7 +43,7 @@ describe("image upload validation", () => {
     await expect(validateImageFile(new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0])], "broken.png", { type: "image/png" }))).rejects.toThrow("malformed");
   });
 
-  it("accepts a valid participant JPEG at exactly 1 MiB and rejects one byte more", async () => {
+  it("accepts a valid participant JPEG at exactly 512000 bytes and rejects 512001 bytes", async () => {
     const jpeg = await sharp({ create: { width: 2, height: 2, channels: 3, background: "red" } }).jpeg().toBuffer();
     const padding = MAX_PARTICIPANT_IMAGE_SIZE - jpeg.byteLength;
     const comments: Buffer[] = [];

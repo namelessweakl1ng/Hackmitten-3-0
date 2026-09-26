@@ -1,27 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-
-type EventConfig = {
-  aboutHeading: string;
-  aboutDescription: string;
-  aboutStatDuration: string;
-  aboutStatTeamSize: string;
-  aboutStatFee: string;
-  aboutStatPrize: string;
-  aboutStatVenue: string;
-  eventDurationHours: number;
-};
 
 export function About() {
   const ref = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
-  const { data } = useQuery<{ config: EventConfig }>({
-    queryKey: ["config"],
-    queryFn: async () => (await fetch("/api/config")).json(),
-  });
-  const cfg = data?.config;
 
   useEffect(() => {
     const el = ref.current;
@@ -34,7 +17,7 @@ export function About() {
     return () => obs.disconnect();
   }, []);
 
-  const heading = cfg?.aboutHeading || "BUILD. BREAK. REBUILD.";
+  const heading = "BUILD. BREAK. REBUILD.";
   const parts = heading.split(/[. ]+/).filter(Boolean);
   // Split heading into 3 parts for color treatment
   const part1 = parts[0] ? parts[0] + "." : "BUILD.";
@@ -42,10 +25,10 @@ export function About() {
   const part3 = parts[2] ? parts[2] + "." : "REBUILD.";
 
   const STATS = [
-    { value: cfg?.aboutStatDuration ?? "24", label: "HOURS", suffix: "" },
-    { value: cfg?.aboutStatTeamSize ?? "3—4", label: "MEMBERS", suffix: "" },
-    { value: cfg?.aboutStatFee ?? "₹1,000", label: "REGISTRATION", suffix: "" },
-    { value: cfg?.aboutStatPrize ?? "₹1,00,000", label: "PRIZE POOL", suffix: "" },
+    { value: "24", label: "HOURS", suffix: "" },
+    { value: "3—4", label: "MEMBERS", suffix: "" },
+    { value: "₹1,000", label: "REGISTRATION", suffix: "" },
+    { value: "₹1,00,000", label: "PRIZE POOL", suffix: "" },
   ];
 
   return (
@@ -70,7 +53,7 @@ export function About() {
 
         <div className="md:col-span-7 md:pl-8 flex flex-col justify-end">
           <p className="text-base md:text-xl text-white/80 leading-relaxed">
-            {cfg?.aboutDescription || "Hackmitten is a 24-hour descent into the unknown, where ideas cross the event horizon and emerge as something built, broken, and rebuilt into existence."}
+            Hackmitten is a 24-hour descent into the unknown, where ideas cross the event horizon and emerge as something built, broken, and rebuilt into existence.
           </p>
           <p className="mt-4 text-sm md:text-base text-[#A8A8A8] leading-relaxed">
             Focused on industry problem statements, the hackathon brings together innovators and developers to collaborate, build practical solutions, and solve real-world challenges through technology and innovation.
@@ -98,7 +81,7 @@ export function About() {
 
           <div className="mt-6 text-xs text-[#A8A8A8]">
             <span className="mono uppercase tracking-widest">Venue · </span>
-            <span className="text-white">{cfg?.aboutStatVenue ?? "MAHARAJA INSTITUTE OF TECHNOLOGY THANDAVAPURA"}</span>
+            <span className="text-white">MAHARAJA INSTITUTE OF TECHNOLOGY THANDAVAPURA</span>
           </div>
         </div>
       </div>

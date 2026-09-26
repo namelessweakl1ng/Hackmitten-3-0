@@ -6,10 +6,10 @@ type AcknowledgementClient = {
     updateMany(args: { where: any; data: any }): Promise<{ count: number }>;
     findUnique(args: any): Promise<any>;
   };
-  eventConfig: { findUnique(args: any): Promise<any> };
 };
 
 const CLAIM_LEASE_MS = 10 * 60 * 1000;
+const MAX_ATTEMPTS = 3;
 
 export async function claimRegistrationAcknowledgement(
   client: AcknowledgementClient,
@@ -20,12 +20,13 @@ export async function claimRegistrationAcknowledgement(
     where: {
       id: teamId,
       registrationAcknowledgementSentAt: null,
+      registrationAcknowledgementAttemptCount: { lt: MAX_ATTEMPTS },
       OR: [
         { registrationAcknowledgementAttemptedAt: null },
         { registrationAcknowledgementAttemptedAt: { lt: new Date(now.getTime() - CLAIM_LEASE_MS) } },
       ],
     },
-    data: { registrationAcknowledgementAttemptedAt: now },
+    data: { registrationAcknowledgementAttemptedAt: now, registrationAcknowledgementAttemptCount: { increment: 1 } },
   });
   return result.count === 1;
 }
@@ -48,7 +49,7 @@ export async function releaseRegistrationAcknowledgementClaim(
 ): Promise<void> {
   await client.team.updateMany({
     where: { id: teamId, registrationAcknowledgementAttemptedAt: claimedAt, registrationAcknowledgementSentAt: null },
-    data: { registrationAcknowledgementAttemptedAt: null },
+    data: { registrationAcknowledgementAttemptedAt: claimedAt },
   });
 }
 
@@ -59,10 +60,7 @@ export async function attemptRegistrationAcknowledgement(
   const claimedAt = new Date();
   if (!(await claimRegistrationAcknowledgement(client, teamId, claimedAt))) return false;
   try {
-    const [team, config] = await Promise.all([
-      client.team.findUnique({ where: { id: teamId }, include: { members: true } }),
-      client.eventConfig.findUnique({ where: { id: "singleton" } }),
-    ]);
+    const team = await client.team.findUnique({ where: { id: teamId }, include: { members: true } });
     const leader = team?.members.find((member: { isLeader: boolean }) => member.isLeader);
     if (!leader?.email) throw new Error("Leader email is missing");
 
@@ -70,7 +68,6 @@ export async function attemptRegistrationAcknowledgement(
       to: leader.email,
       leaderName: leader.fullName,
       teamName: team.teamName,
-      contactEmail: config?.contactEmail,
     });
     if (!result.success) throw new Error("Email provider did not accept the acknowledgement");
 

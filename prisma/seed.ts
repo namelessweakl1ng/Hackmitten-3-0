@@ -9,7 +9,7 @@
  *   - Default meals (Breakfast, Lunch, Snacks, Dinner)
  *
  * Does NOT create:
- *   - demo teams / sponsors / gallery / coordinators / winners / phases / food check-ins
+ *   - required operational accounts and singleton registration controls
  *   - writes to .env.local or any other file
  *
  * Required env vars:
@@ -49,6 +49,10 @@ async function main() {
   const adminPassword = required("ADMIN_PASSWORD");
 
   const berserkSecret = required("HM3_BERSERK_SECRET");
+  const coordinator = readCredentialGroup(process.env, "COORDINATOR");
+  const foodAdmin = readCredentialGroup(process.env, "FOOD_ADMIN");
+  if (!coordinator) throw new Error("COORDINATOR_USERNAME, COORDINATOR_EMAIL, and COORDINATOR_PASSWORD are required for bootstrap");
+  if (!foodAdmin) throw new Error("FOOD_ADMIN_USERNAME, FOOD_ADMIN_EMAIL, and FOOD_ADMIN_PASSWORD are required for bootstrap");
 
   const berserkHash = await bcrypt.hash(berserkSecret, 12);
 
@@ -66,25 +70,13 @@ async function main() {
   });
   console.log(`  ✓ super admin (${adminUsername})`);
 
-  // ─── Coordinator (optional) ─────────────────────────────────────────────
-  const coordinator = readCredentialGroup(process.env, "COORDINATOR");
-  if (coordinator) {
-    const user = await ensureOperationalUser({ ...coordinator, name: "Coordinator", role: "COORDINATOR" });
-    console.log(`  ✓ coordinator (${user.username}, ${user.email})`);
-  } else {
-    console.log("  · coordinator account not provisioned (credential group absent)");
-  }
+  // ─── Required coordinator account ─────────────────────────────────────────────
+  const coordinatorUser = await ensureOperationalUser({ ...coordinator, name: "Coordinator", role: "COORDINATOR" });
+  console.log(`  coordinator provisioned (${coordinatorUser.username})`);
 
-  // ─── Food admin (optional) ──────────────────────────────────────────────
-  const foodAdmin = readCredentialGroup(process.env, "FOOD_ADMIN");
-  if (foodAdmin) {
-    const user = await ensureOperationalUser({ ...foodAdmin, name: "Food Admin", role: "FOOD_ADMIN" });
-    console.log(`  ✓ food admin (${user.username}, ${user.email})`);
-  } else {
-    console.log("  · food admin account not provisioned (credential group absent)");
-  }
+  const foodAdminUser = await ensureOperationalUser({ ...foodAdmin, name: "Food Admin", role: "FOOD_ADMIN" });
+  console.log(`  food admin provisioned (${foodAdminUser.username})`);
 
-  // ─── Event config singleton ────────────────────────────────────────────
   const eventCfg = await ensureSingletonEventConfig();
   console.log(`  ✓ event config ready (${eventCfg.id})`);
 

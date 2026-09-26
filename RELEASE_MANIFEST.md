@@ -6,12 +6,13 @@
 - PostgreSQL with Prisma 6 and committed forward migrations.
 - Standalone Node.js artifact at `.next/standalone/`, supervised by systemd behind a TLS reverse proxy.
 - Persistent filesystem for new uploads: configured public and private directories. Public uploads stream through `/api/uploads/[fileName]`; payment screenshots stream only through the permission-protected admin endpoint.
-- Resend for configured production email.
+- Nodemailer SMTP transport with STARTTLS/TLS for registration email.
 - No hosted storage client is included. All managed files use the configured Linux filesystem; participant images and payment screenshots are private.
 
 ## Build and database lifecycle
 
-- `bun run build`: Prisma client generation, Next.js production build, standalone runtime preparation. No database migration or bootstrap.
+- `bun run db:generate`: Prisma client generation.
+- `bun run build`: Next.js production build and standalone runtime preparation only. No database migration or bootstrap.
 - `bun run db:migrate:deploy`: explicit production migration step.
 - `bun run db:bootstrap`: explicit provisioning of initial/configured operational users, singleton event config, and default meals.
 - `bun run start`: starts standalone `server.js`; set `PORT` and `HOSTNAME`.
@@ -23,7 +24,7 @@ Build with `bun install --frozen-lockfile && bun run build` on Linux. Package `.
 
 ## Required runtime configuration
 
-`DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, and `HACKMITTEN_STORAGE_ROOT`. Configure `RESEND_API_KEY` and `EMAIL_FROM` for production email. Bootstrap-only variables: `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `HM3_BERSERK_SECRET`. See `.env.example`.
+`DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, and `HACKMITTEN_STORAGE_ROOT`. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. Bootstrap-only variables: admin/coordinator/food-admin username, email, and password groups, plus `HM3_BERSERK_SECRET`. See `.env.example`.
 
 ## Operations
 
@@ -41,4 +42,4 @@ Build with `bun install --frozen-lockfile && bun run build` on Linux. Package `.
 - `tests`: Bun unit tests and optional PostgreSQL integration tests.
 - `deploy/hackmitten.service`: systemd unit template.
 
-Optional private participant photos are supported at a 1 MiB maximum. Demo seeding is development-only and must not be run in production.
+Optional private participant photos are supported at a strict 512,000-byte maximum. Demo seeding has been removed from the release scripts.

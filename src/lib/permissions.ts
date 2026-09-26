@@ -13,9 +13,6 @@ export type Permission =
   | "food:manage"
   | "config:edit"
   | "phase:manage"
-  | "sponsor:manage"
-  | "winner:manage"
-  | "gallery:manage"
   | "coordinator:manage"
   | "user:manage"
   | "credential:change"
@@ -36,9 +33,6 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "food:manage",
     "config:edit",
     "phase:manage",
-    "sponsor:manage",
-    "winner:manage",
-    "gallery:manage",
     "coordinator:manage",
     "user:manage",
     "credential:change",

@@ -1,5 +1,14 @@
 import { db } from "@/lib/db";
 import { composeIso } from "@/lib/timezone";
+import { HACKMITTEN_EVENT } from "@/lib/event-config";
+
+const EVENT_STATIC = {
+  eventStartDate: HACKMITTEN_EVENT.startDate,
+  eventStartTime: HACKMITTEN_EVENT.startTime,
+  eventTimezone: HACKMITTEN_EVENT.timezone,
+  eventDurationHours: HACKMITTEN_EVENT.durationHours,
+  registrationDeadline: HACKMITTEN_EVENT.registrationDeadline,
+};
 
 /**
  * Event lifecycle states — derived from real configured timestamps.
@@ -65,6 +74,8 @@ export function computeEventState(cfg: {
   registrationOpens?: string | null;
   registrationsOpen?: boolean | null;
   registrationCapacity?: number | null;
+  registrationEnabled?: boolean | null;
+  registrationLimit?: number | null;
   currentCount?: number | null;
 }, now: Date = new Date()): EventStateInfo {
   const timezone = cfg.eventTimezone || "Asia/Kolkata";
@@ -105,8 +116,8 @@ export function computeEventState(cfg: {
     state = "REGISTRATION_OPEN";
   }
 
-  const registrationsOpen = cfg.registrationsOpen ?? true;
-  const registrationCapacity = cfg.registrationCapacity ?? 60;
+  const registrationsOpen = cfg.registrationEnabled ?? cfg.registrationsOpen ?? true;
+  const registrationCapacity = cfg.registrationLimit !== undefined ? (cfg.registrationLimit ?? 0) : (cfg.registrationCapacity ?? 0);
   const currentCount = cfg.currentCount ?? 0;
   const isFull = registrationCapacity > 0 && currentCount >= registrationCapacity;
   // Registration is "available" when state is REGISTRATION_OPEN AND the manual
@@ -138,7 +149,7 @@ export function computeEventState(cfg: {
 export async function getEventState(
   database: Pick<typeof db, "eventConfig" | "team"> = db,
 ): Promise<EventStateInfo> {
-  const cfg = await database.eventConfig.findUnique({ where: { id: "singleton" } });
+  const cfg = await database.eventConfig.findUnique({ where: { id: "singleton" }, select: { registrationEnabled: true, registrationLimit: true } });
   if (!cfg) {
     return {
       state: "UPCOMING",
@@ -151,7 +162,7 @@ export async function getEventState(
       registrationOpen: false,
       registrationMessage: "Event not configured.",
       registrationsOpen: false,
-      registrationCapacity: 60,
+      registrationCapacity: 0,
       currentCount: 0,
       registrationAvailable: false,
     };
@@ -160,6 +171,7 @@ export async function getEventState(
   const currentCount = await database.team.count();
 
   return computeEventState({
+    ...EVENT_STATIC,
     ...cfg,
     currentCount,
   });

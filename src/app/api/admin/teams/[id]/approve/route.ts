@@ -68,10 +68,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       });
       const seq = nextRegistrationSequence(allocatedIds.map((row) => row.registrationId));
       const regId = generateRegistrationId(seq);
-      const updatedTeam = await tx.team.update({
-        where: { id },
+      const transition = await tx.team.updateMany({
+        where: { id, status: { notIn: ["APPROVED", "REJECTED"] } },
         data: { status: "APPROVED", registrationId: regId },
       });
+      if (transition.count !== 1) throw new Error("TEAM_STATUS_CHANGED");
+      const updatedTeam = await tx.team.findUniqueOrThrow({ where: { id } });
 
       // Assign participant IDs + opaque QR tokens
       const members = await tx.participant.findMany({
@@ -155,7 +157,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             whatsappGroupUrl: "https://chat.whatsapp.com/CKjNXeNALPzAymQ0GhfMCj",
           }),
         });
-        if (!emailResult.success) {
+        if (emailResult.success) {
+          await db.team.updateMany({ where: { id, status: "APPROVED", approvalEmailSentAt: null }, data: { approvalEmailSentAt: new Date() } });
+        } else {
           console.error("[approval-email] delivery failed", {
             teamId: id,
             provider: emailResult.provider,
@@ -171,6 +175,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   } catch (err) {
     if (err instanceof Error && err.message === "TEAM_ALREADY_APPROVED") {
       return NextResponse.json({ error: "Already approved" }, { status: 409 });
+    }
+    if (err instanceof Error && err.message === "TEAM_STATUS_CHANGED") {
+      return NextResponse.json({ error: "Team status has already changed" }, { status: 409 });
     }
     if (err instanceof Error && err.message === "PAYMENT_NOT_VERIFIED") {
       return NextResponse.json({ error: "Cannot approve team: payment is not verified" }, { status: 400 });
