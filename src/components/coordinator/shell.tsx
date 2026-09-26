@@ -1,16 +1,15 @@
 "use client";
 
-import { Session } from "next-auth";
-import { SessionProvider, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { LogOut, Home, Users } from "lucide-react";
 
-function CoordinatorShellInner({ children, session }: { children: React.ReactNode; session: Session | null }) {
+function CoordinatorShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { status } = useSession();
+  const { status, data: session } = useSession();
 
   useEffect(() => {
     if (status === "loading") return;
@@ -88,10 +87,6 @@ function CoordinatorShellInner({ children, session }: { children: React.ReactNod
   );
 }
 
-export function CoordinatorShell({ children, session }: { children: React.ReactNode; session: Session | null }) {
-  return (
-    <SessionProvider session={session}>
-      <CoordinatorShellInner session={session}>{children}</CoordinatorShellInner>
-    </SessionProvider>
-  );
+export function CoordinatorShell({ children }: { children: React.ReactNode }) {
+  return <CoordinatorShellInner>{children}</CoordinatorShellInner>;
 }

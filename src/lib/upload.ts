@@ -2,9 +2,9 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import sharp from "sharp";
 
-const STORAGE_ROOT = path.resolve(process.env.HACKMITTEN_STORAGE_ROOT || path.join(process.cwd(), "storage"));
-const UPLOAD_ROOT = path.resolve(process.env.HM3_PUBLIC_UPLOAD_DIR || path.join(STORAGE_ROOT, "public"));
-const PRIVATE_UPLOAD_ROOT = path.resolve(process.env.HM3_PRIVATE_UPLOAD_DIR || path.join(STORAGE_ROOT, "private"));
+const STORAGE_ROOT = path.resolve(/*turbopackIgnore: true*/ process.env.HACKMITTEN_STORAGE_ROOT || path.join(process.cwd(), "storage"));
+const UPLOAD_ROOT = path.resolve(/*turbopackIgnore: true*/ process.env.HM3_PUBLIC_UPLOAD_DIR || path.join(STORAGE_ROOT, "public"));
+const PRIVATE_UPLOAD_ROOT = path.resolve(/*turbopackIgnore: true*/ process.env.HM3_PRIVATE_UPLOAD_DIR || path.join(STORAGE_ROOT, "private"));
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const PARTICIPANT_IMAGE_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_SIZE = 8 * 1024 * 1024;
@@ -150,13 +150,13 @@ function privateFileName(relativePath: string): string | null {
 
 export async function deletePrivateFile(relativePath: string): Promise<void> {
   const fileName = privateFileName(relativePath);
-  if (fileName) await fs.rm(path.join(PRIVATE_UPLOAD_ROOT, fileName), { force: true });
+  if (fileName) await fs.rm(path.join(/*turbopackIgnore: true*/ PRIVATE_UPLOAD_ROOT, fileName), { force: true });
 }
 
 export async function readPublicUpload(fileName: string): Promise<Buffer | null> {
   if (!/^[a-z0-9_-]{1,40}_[a-f0-9]{12}\.(?:jpg|png|webp|gif)$/.test(fileName)) return null;
   try {
-    return await fs.readFile(path.join(UPLOAD_ROOT, fileName));
+    return await fs.readFile(path.join(/*turbopackIgnore: true*/ UPLOAD_ROOT, fileName));
   } catch {
     return null;
   }
@@ -169,13 +169,13 @@ async function saveToLocal(
   mimeType: string,
 ): Promise<StoredFile> {
   if (isPrivate) {
-    await fs.mkdir(PRIVATE_UPLOAD_ROOT, { recursive: true, mode: 0o700 });
-    await fs.chmod(PRIVATE_UPLOAD_ROOT, 0o700);
+    await fs.mkdir(/*turbopackIgnore: true*/ PRIVATE_UPLOAD_ROOT, { recursive: true, mode: 0o700 });
+    await fs.chmod(/*turbopackIgnore: true*/ PRIVATE_UPLOAD_ROOT, 0o700);
 
-    const abs = path.join(PRIVATE_UPLOAD_ROOT, fileName);
+    const abs = path.join(/*turbopackIgnore: true*/ PRIVATE_UPLOAD_ROOT, fileName);
     const buf = await file.arrayBuffer();
 
-    await fs.writeFile(abs, Buffer.from(buf), { flag: "wx", mode: 0o600 });
+    await fs.writeFile(/*turbopackIgnore: true*/ abs, Buffer.from(buf), { flag: "wx", mode: 0o600 });
 
     return {
       relativePath: `private://${fileName}`,
@@ -187,13 +187,13 @@ async function saveToLocal(
     };
   }
 
-  await fs.mkdir(UPLOAD_ROOT, { recursive: true, mode: 0o755 });
-  await fs.chmod(UPLOAD_ROOT, 0o755);
+  await fs.mkdir(/*turbopackIgnore: true*/ UPLOAD_ROOT, { recursive: true, mode: 0o755 });
+  await fs.chmod(/*turbopackIgnore: true*/ UPLOAD_ROOT, 0o755);
 
-  const abs = path.join(UPLOAD_ROOT, fileName);
+  const abs = path.join(/*turbopackIgnore: true*/ UPLOAD_ROOT, fileName);
   const buf = await file.arrayBuffer();
 
-  await fs.writeFile(abs, Buffer.from(buf), { flag: "wx", mode: 0o644 });
+  await fs.writeFile(/*turbopackIgnore: true*/ abs, Buffer.from(buf), { flag: "wx", mode: 0o644 });
 
   return {
     relativePath: `/api/uploads/${fileName}`,
@@ -214,10 +214,10 @@ export async function readPrivateFile(relativePath: string): Promise<{
 } | null> {
   const fileName = privateFileName(relativePath);
   if (!fileName) return null;
-  const abs = path.join(PRIVATE_UPLOAD_ROOT, fileName);
+  const abs = path.join(/*turbopackIgnore: true*/ PRIVATE_UPLOAD_ROOT, fileName);
 
   try {
-    const data = await fs.readFile(abs);
+    const data = await fs.readFile(/*turbopackIgnore: true*/ abs);
     const ext = path.extname(fileName).toLowerCase();
 
     const contentType =

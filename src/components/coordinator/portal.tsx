@@ -20,6 +20,7 @@ type ApprovedTeam = {
     isLeader: boolean;
     college: string;
     degree: string | null;
+    hasParticipantImage: boolean;
   }[];
 };
 
@@ -160,7 +161,7 @@ export function CoordinatorPortal() {
               <div className="mono text-[10px] uppercase tracking-widest text-[#A8A8A8] mb-3">
                 Members ({selectedTeam.members.length})
               </div>
-              <div className="space-y-3">
+                  <div className="space-y-3">
                 {selectedTeam.members.map((m, i) => (
                   <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg bg-[#080808] border border-white/5">
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full mono text-xs ${
@@ -179,6 +180,11 @@ export function CoordinatorPortal() {
                         <div className="text-[11px] text-[#A8A8A8] truncate mt-0.5">Degree: {m.degree}</div>
                       )}
                     </div>
+                    {m.hasParticipantImage && (
+                      <a href={`/api/admin/participants/${m.id}/image`} download title={`Download ${m.fullName}'s participant photo`}>
+                        <img src={`/api/admin/participants/${m.id}/image`} alt={`${m.fullName} participant photo`} className="h-12 w-12 rounded object-cover" />
+                      </a>
+                    )}
                     {m.qrToken && m.participantId && (
                       <button
                         onClick={() => downloadParticipantQR(m.fullName, m.qrToken!)}

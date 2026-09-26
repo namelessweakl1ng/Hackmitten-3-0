@@ -1,5 +1,5 @@
 [Unit]
-Description=Hackmitten 3.0 application
+Description=Hackmitten 3.0 backend API
 After=network-online.target postgresql.service
 Wants=network-online.target
 
@@ -7,13 +7,13 @@ Wants=network-online.target
 Type=simple
 User=hackmitten
 Group=hackmitten
-WorkingDirectory=/opt/hackmitten/current
-EnvironmentFile=/etc/hackmitten/hackmitten.env
+WorkingDirectory=/opt/hackmitten/backend/current
+EnvironmentFile=/etc/hackmitten/backend.env
 Environment=NODE_ENV=production
 Environment=HOSTNAME=127.0.0.1
-Environment=PORT=3000
+Environment=PORT=3001
 Environment=HACKMITTEN_STORAGE_ROOT=/var/lib/hackmitten
-ExecStart=/usr/bin/node /opt/hackmitten/current/server.js
+ExecStart=/usr/bin/node /opt/hackmitten/backend/current/server.js
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

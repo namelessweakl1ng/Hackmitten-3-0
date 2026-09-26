@@ -43,6 +43,7 @@
     "scripts",
     "skills",
     "tests",
+    "deployment/packages",
     "agent-ctx"
   ]
 }

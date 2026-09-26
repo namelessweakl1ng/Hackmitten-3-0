@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { deletePrivateFile, storePaymentScreenshot, UploadError } from "@/lib/upload";
 import { jsonError } from "@/lib/api-auth";
+import { hasRegistrationAccess } from "@/lib/registration-access";
 
 /**
  * POST /api/registrations/:id/payment-screenshot
@@ -14,9 +15,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "Upload exceeds the request size limit." }, { status: 413 });
     }
     const { id } = await params;
+    if (!(await hasRegistrationAccess(req, id, db))) {
+      return NextResponse.json({ error: "Registration access denied", code: "UNAUTHORIZED" }, { status: 401 });
+    }
     const team = await db.team.findUnique({ where: { id }, include: { payment: true } });
     if (!team) {
-      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+      return NextResponse.json({ error: "Registration access denied", code: "UNAUTHORIZED" }, { status: 401 });
     }
     if (!team.payment) {
       return NextResponse.json(

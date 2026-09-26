@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { paymentSubmissionSchema } from "@/lib/validators";
 import { jsonError } from "@/lib/api-auth";
 import { attemptRegistrationAcknowledgement } from "@/lib/registration-acknowledgement";
+import { hasRegistrationAccess } from "@/lib/registration-access";
 
 /**
  * POST /api/registrations/:id/payment
@@ -12,6 +13,9 @@ import { attemptRegistrationAcknowledgement } from "@/lib/registration-acknowled
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    if (!(await hasRegistrationAccess(req, id, db))) {
+      return NextResponse.json({ error: "Registration access denied", code: "UNAUTHORIZED" }, { status: 401 });
+    }
     const body = await req.json();
     const parsed = paymentSubmissionSchema.safeParse(body);
     if (!parsed.success) {
@@ -21,9 +25,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       );
     }
     const team = await db.team.findUnique({ where: { id }, include: { payment: true } });
-    if (!team) {
-      return NextResponse.json({ error: "Team not found" }, { status: 404 });
-    }
+    if (!team) return NextResponse.json({ error: "Registration access denied", code: "UNAUTHORIZED" }, { status: 401 });
     // Only allow from SUBMITTED or PAYMENT_PENDING (resubmission allowed if rejected)
     if (!["SUBMITTED", "PAYMENT_PENDING", "REJECTED"].includes(team.status)) {
       return NextResponse.json(

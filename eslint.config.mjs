@@ -30,6 +30,7 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "skills/**",
     "agent-ctx/**",
     "mini-services/**",
+    "deployment/packages/**",
   ],
 }];
 

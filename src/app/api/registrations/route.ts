@@ -6,6 +6,7 @@ import { computeEventState, getEventState } from "@/lib/event-state";
 import { normalizeTeamName } from "@/lib/team-name";
 import { attemptRegistrationAcknowledgement } from "@/lib/registration-acknowledgement";
 import { deletePrivateFile, storeParticipantImage, UploadError } from "@/lib/upload";
+import { createRegistrationAccessToken, hashRegistrationAccessToken, registrationAccessCookieName, REGISTRATION_ACCESS_COOKIE_MAX_AGE_SECONDS } from "@/lib/registration-access";
 
 type RawQueryClient = Pick<typeof db, "$queryRaw">;
 
@@ -131,6 +132,7 @@ export async function POST(req: Request) {
     // ─── Transaction: re-check capacity atomically + create team ────────
     // Re-counting inside the transaction prevents the race where two registrations
     // slip through the capacity check simultaneously.
+    const registrationAccessToken = createRegistrationAccessToken();
     let team;
     try {
       team = await db.$transaction(async (tx) => {
@@ -165,6 +167,8 @@ export async function POST(req: Request) {
           teamName,
           college: college ?? members[0]?.college ?? null,
           status: "SUBMITTED",
+          registrationAccessTokenHash: hashRegistrationAccessToken(registrationAccessToken),
+          registrationAccessExpiresAt: new Date(Date.now() + REGISTRATION_ACCESS_COOKIE_MAX_AGE_SECONDS * 1000),
           members: {
             create: members.map((m, index) => ({
               fullName: m.fullName,
@@ -188,11 +192,27 @@ export async function POST(req: Request) {
     }
 
     const acknowledgementEmailSent = await attemptRegistrationAcknowledgement(team.id);
+    const {
+      registrationAccessTokenHash: _registrationAccessTokenHash,
+      registrationAccessExpiresAt: _registrationAccessExpiresAt,
+      ...teamWithoutAccessHash
+    } = team;
     const publicTeam = {
-      ...team,
-      members: team.members.map(({ participantImagePath: _path, participantImageMimeType: _mime, participantImageSizeBytes: _size, ...member }) => member),
+      ...teamWithoutAccessHash,
+      members: teamWithoutAccessHash.members.map(({ participantImagePath: _path, participantImageMimeType: _mime, participantImageSizeBytes: _size, ...member }) => member),
     };
-    return NextResponse.json({ team: publicTeam, acknowledgementEmailSent }, { status: 201 });
+    const response = NextResponse.json({ team: publicTeam, acknowledgementEmailSent }, { status: 201 });
+    const cookieName = registrationAccessCookieName(team.id);
+    if (cookieName) {
+      response.cookies.set(cookieName, registrationAccessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: `/api/registrations/${team.id}`,
+        maxAge: REGISTRATION_ACCESS_COOKIE_MAX_AGE_SECONDS,
+      });
+    }
+    return response;
   } catch (err) {
     if (err instanceof UploadError) {
       await Promise.all(storedParticipantImages.map((file) => deletePrivateFile(file.relativePath)));

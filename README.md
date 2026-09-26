@@ -4,33 +4,34 @@ Hackmitten 3.0 is a Next.js 16 application for public event information, team re
 
 ## Architecture
 
-- Next.js App Router, React 19, TypeScript, standalone Node.js output.
-- PostgreSQL managed through Prisma. Migrations are explicit deployment operations.
-- Credentials authentication with NextAuth.js JWT sessions and bcrypt password hashes.
-- Roles: SUPER_ADMIN, COORDINATOR, FOOD_ADMIN, PARTICIPANT. API handlers enforce permissions on the server.
-- Public uploads are stored under `HM3_PUBLIC_UPLOAD_DIR` and served through `/api/uploads/<generated-name>`.
-- Payment screenshots and optional participant photos are stored under the private directory; only authorized endpoints stream them. Participant photos are limited to 512,000 bytes each.
-- Managed uploads use the Linux filesystem rooted at `HACKMITTEN_STORAGE_ROOT` (production default `/var/lib/hackmitten`); public content is served through validated application paths.
+- The repository source is staged into independently deployable Next.js frontend and API-only backend packages by `bun run package:deployments`.
+- Frontend owns public, registration, login, admin/coordinator/food pages and public assets. It contains no API route code, Prisma schema, SMTP module, or private storage code.
+- Backend owns all `/api/*` routes, NextAuth credential validation/session cookies, server authorization, PostgreSQL/Prisma, SMTP, and private files.
+- Production Nginx serves one HTTPS origin and routes `/api/` to the private backend listener. Browser calls and session cookies therefore stay same-origin; backend ports are not public.
+- PostgreSQL migrations and operational-user bootstrap are explicit operations, never part of application build/start.
+- Participant photos remain private and limited to 512,000 bytes. Managed files use the Linux filesystem rooted at `HACKMITTEN_STORAGE_ROOT` (normally `/var/lib/hackmitten`).
 - Email uses authenticated SMTP with STARTTLS/TLS. Delivery failures do not roll back committed registration or status changes.
 
 ## Requirements
 
-- Bun 1.3 or later for install, scripts, tests, and Prisma operations.
+- Bun 1.4.2 for reproducible split-package install, tests, and Prisma operations.
 - Node.js 20.9 or later for the standalone runtime.
 - PostgreSQL 14 or later.
 - Linux host, TLS reverse proxy, and persistent writable storage.
 
 ## Environment
 
-Copy `.env.example` and provide production values through a protected environment file or secret manager. Never bake them into the application artifact.
+For split deployments, keep frontend and backend configuration separate. The backend-only template is `deployment/environment/backend.env.example`; the frontend template has only a non-secret development API origin. Never bake runtime values into an artifact.
 
-Required at runtime: `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`.
+Backend runtime requires `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, persistent storage, and SMTP values.
 
-Required only for bootstrap: the admin, coordinator, and food-admin username/email/password groups plus `HM3_BERSERK_SECRET`. `.env.example` provides the required usernames; set real account emails and unique passwords in the protected runtime environment.
+Bootstrap-only values include the admin, coordinator, and food-admin username/email/password groups plus `HM3_BERSERK_SECRET`. Set them only for the explicit bootstrap operation, then remove them from the service environment.
 
-Required for production storage: `HACKMITTEN_STORAGE_ROOT` (normally `/var/lib/hackmitten`). Configure SMTP with `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. Directory overrides are optional. See [HUMAN_DEVELOPER_GUIDE.md](HUMAN_DEVELOPER_GUIDE.md).
+Configure SMTP with `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. See [deployment/README.md](deployment/README.md) for package-specific environments, Linux services, Nginx, migrations, backup, and recovery.
 
 ## Development
+
+To run the deployable architecture locally, first create the packages and follow [deployment/README.md](deployment/README.md): start the backend on 3001, then the frontend on 3000 with `BACKEND_API_ORIGIN=http://127.0.0.1:3001`. The older combined root development app remains available for repository-level work:
 
 ```sh
 bun install

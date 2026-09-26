@@ -30,13 +30,20 @@ export async function GET() {
             isLeader: true,
             college: true,
             degree: true,
+            participantImagePath: true,
           },
           orderBy: { isLeader: "desc" },
         },
       },
       orderBy: { registrationId: "asc" },
     });
-    return NextResponse.json({ teams });
+    return NextResponse.json({ teams: teams.map((team) => ({
+      ...team,
+      members: team.members.map(({ participantImagePath, ...member }) => ({
+        ...member,
+        hasParticipantImage: Boolean(participantImagePath),
+      })),
+    })) });
   } catch (err) {
     return jsonError(err);
   }
