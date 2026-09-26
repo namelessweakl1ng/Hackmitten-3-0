@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Users, Crown, X, Download, UtensilsCrossed, Check, Clock, FileSpreadsheet } from "lucide-react";
 import QRCode from "qrcode";
+import { csvDocument } from "@/lib/csv";
 
 type ApprovedTeam = {
   id: string;
@@ -342,8 +343,8 @@ function MealConsumptionView() {
 }
 
 // Download teams as CSV for manual verification
-function downloadTeamsCSV(teams: ApprovedTeam[]) {
-  const rows: string[][] = [["Registration ID", "Team Name", "College", "Member Name", "Participant ID", "Is Leader"]];
+export function downloadTeamsCSV(teams: ApprovedTeam[]) {
+  const rows: string[][] = [["Registration ID", "Team Name", "College", "Member Name", "Member College", "Degree", "Participant ID", "Is Leader"]];
   for (const team of teams) {
     for (const m of team.members) {
       rows.push([
@@ -351,12 +352,14 @@ function downloadTeamsCSV(teams: ApprovedTeam[]) {
         team.teamName,
         team.college ?? "",
         m.fullName,
+        m.college,
+        m.degree ?? "",
         m.participantId ?? "",
         m.isLeader ? "Yes" : "No",
       ]);
     }
   }
-  const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+  const csv = csvDocument(rows);
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

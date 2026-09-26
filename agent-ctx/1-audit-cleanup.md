@@ -29,7 +29,7 @@ This is the deep-clean / zero-junk repository audit task for Hackmitten 3.0.
 - 3D: `three`, `@react-three/fiber`, `@react-three/drei`, `@react-three/postprocessing`
 - Smooth scroll: `lenis`
 - QR: `qrcode`, `qrcode.react`, `html5-qrcode`
-- Blob: `@vercel/blob` (lazy import)
+- Historical audit note: cloud storage findings were superseded by the Linux filesystem implementation; this file should not be used as deployment guidance.
 - Tailwind: `tailwindcss`, `@tailwindcss/postcss`, `tw-animate-css`
 
 ### Dependencies NOT used (will remove)

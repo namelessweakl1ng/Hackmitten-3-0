@@ -221,6 +221,11 @@ export function StepMembers() {
                     onChange={(v) => setMember(i, { degree: v })}
                   />
                 </div>
+                <label className="md:col-span-2 block">
+                  <span className="mono text-xs uppercase tracking-widest text-[#A8A8A8]">Participant photo (optional, JPEG / PNG / WebP, max 1 MiB)</span>
+                  <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setMember(i, { participantImage: e.target.files?.[0] ?? null })} className="mt-2 block w-full text-xs text-[#A8A8A8]" />
+                  {m.participantImage && <span className="mt-1 block text-xs text-[#A8A8A8]">Selected: {m.participantImage.name} ({Math.ceil(m.participantImage.size / 1024)} KiB)</span>}
+                </label>
               </div>
 
             </div>
@@ -352,11 +357,10 @@ export function StepPayment() {
     setSubmitting(true);
     try {
       // 1. Create the team (the server derives the first member as leader)
-      const regRes = await fetch("/api/registrations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teamName, college, members }),
-      });
+      const registrationForm = new FormData();
+      registrationForm.append("registration", JSON.stringify({ teamName, college, members: members.map(({ participantImage: _image, ...member }) => member) }));
+      members.forEach((member, index) => { if (member.participantImage) registrationForm.append(`participantImage${index}`, member.participantImage); });
+      const regRes = await fetch("/api/registrations", { method: "POST", body: registrationForm });
       const regJson = await regRes.json();
       if (!regRes.ok) throw new Error(regJson.error || "Registration failed");
       const newTeamId = regJson.team.id;

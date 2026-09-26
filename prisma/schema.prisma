@@ -1,5 +1,5 @@
 // Hackmitten 3.0 — Prisma schema
-// Database: PostgreSQL (Supabase production / local PostgreSQL dev)
+// Database: PostgreSQL
 
 generator client {
   provider = "prisma-client-js"
@@ -183,6 +183,9 @@ model Participant {
   phone         String
   college       String
   degree        String?
+  participantImagePath String?
+  participantImageMimeType String?
+  participantImageSizeBytes Int?
   isLeader      Boolean  @default(false)
   // Generated only after team approval
   participantId String?  @unique

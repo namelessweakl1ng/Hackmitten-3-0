@@ -1,5 +1,5 @@
 import path from "node:path";
-import { cp, mkdir } from "node:fs/promises";
+import { cp, mkdir, readdir, rm } from "node:fs/promises";
 
 const standalone = ".next/standalone";
 await mkdir(`${standalone}/.next`, { recursive: true });
@@ -13,4 +13,9 @@ await cp("public", `${standalone}/public`, {
     return relative.startsWith("..") || path.isAbsolute(relative);
   },
 });
+for (const entry of await readdir(standalone, { withFileTypes: true })) {
+  if (entry.isFile() && /^\.env(?:\.|$)/.test(entry.name)) {
+    await rm(path.join(standalone, entry.name), { force: true });
+  }
+}
 console.log("Standalone runtime prepared at .next/standalone");

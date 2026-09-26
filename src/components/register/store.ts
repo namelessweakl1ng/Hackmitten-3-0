@@ -8,6 +8,7 @@ export interface MemberForm {
   phone: string;
   college: string;
   degree: string;
+  participantImage: File | null;
 }
 
 interface RegisterState {
@@ -50,7 +51,7 @@ interface RegisterState {
   reset: () => void;
 }
 
-const emptyMember = (): MemberForm => ({ fullName: "", email: "", phone: "", college: "", degree: "" });
+const emptyMember = (): MemberForm => ({ fullName: "", email: "", phone: "", college: "", degree: "", participantImage: null });
 
 export const useRegisterStore = create<RegisterState>((set) => ({
   step: 0,

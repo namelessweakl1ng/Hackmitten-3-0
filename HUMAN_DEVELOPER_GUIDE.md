@@ -23,11 +23,11 @@ PostgreSQL is the only supported database. Prisma schema is `prisma/schema.prism
 Server-side Zod validation requires 3–4 members, college and degree, valid member data, and unique email addresses within a team. The server assigns the first member as leader and ignores client leader flags. Team names are normalized and checked transactionally. Payment is a separate state transition; approval creates registration/participant identifiers and opaque QR tokens. Acknowledgement/approval email failures do not roll back the database mutation.
 
 ### Storage
-New public files are written to `HM3_PUBLIC_UPLOAD_DIR`; new payment screenshots go to `HM3_PRIVATE_UPLOAD_DIR`. If unset, both directories are under `storage/` relative to the runtime working directory. The public upload route only accepts generated, constrained filenames. Private screenshots are outside the public route and are streamed from the authorized admin payment endpoint with no-store headers.
+New public files are written to `HM3_PUBLIC_UPLOAD_DIR`; private payment screenshots and optional participant photos go to `HM3_PRIVATE_UPLOAD_DIR`. Both default below `HACKMITTEN_STORAGE_ROOT` (`storage/` only as a local development default). The public upload route only accepts generated, constrained filenames. Private files are outside the public route and are streamed only from permission-checked endpoints with no-store headers.
 
-Mount both paths on persistent storage outside a release directory. Back them up with PostgreSQL. Restrict private directory access to the service account and backup operators. Before upgrading, copy legacy `public/uploads` contents into the new public upload directory and `.private-uploads` contents into the private upload directory. The old `.private-uploads/` local path is also read as a compatibility fallback. Existing Supabase-backed screenshot rows can still be read if legacy Supabase credentials are configured; new uploads never use that provider. Migrate legacy files before removing that compatibility. Standalone packaging deliberately excludes `public/uploads` so runtime uploads cannot leak into a release artifact.
+Mount storage outside a release directory. Back it up with PostgreSQL. Restrict private directory access to the service account and backup operators. Existing local `public/uploads` and `.private-uploads` files must be copied during cutover; standalone packaging excludes `public/uploads`. Export hosted legacy screenshots before cutover and map their rows to local logical keys using the reviewed import process. This runtime has no hosted-storage dependency or fallback.
 
-Upload validation allows JPEG, PNG, WebP, and GIF up to 8 MiB, requires recognized magic bytes matching the declared MIME, and uses server-generated filenames.
+Public content and payment screenshot uploads allow JPEG, PNG, WebP, and GIF up to 8 MiB. Participant photos allow JPEG, PNG, and WebP up to exactly 1,048,576 bytes. Server validation enforces the size and checks recognized magic bytes against the declared MIME. Filenames are generated server-side. Private directories/files are created with restrictive Unix permissions.
 
 ### Email
 Production email uses Resend via `RESEND_API_KEY` and `EMAIL_FROM`. Keep credentials server-side. Templates escape interpolated HTML and include text alternatives. Missing provider configuration/failure does not undo committed registration or approval. A failed registration acknowledgement releases its idempotency claim; a later payment submission retries it. Successful delivery is recorded separately. A stale in-progress claim can be retried after its lease expires.
@@ -45,9 +45,8 @@ Production email uses Resend via `RESEND_API_KEY` and `EMAIL_FROM`. Keep credent
 | `COORDINATOR_USERNAME/EMAIL/PASSWORD` | Optional bootstrap group | Create/update coordinator operational user; set all three |
 | `FOOD_ADMIN_USERNAME/EMAIL/PASSWORD` | Optional bootstrap group | Create/update food administrator; set all three |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Optional; configure in production | Resend API access and verified sender |
-| `HM3_PUBLIC_UPLOAD_DIR` | Optional | Persistent public upload directory |
-| `HM3_PRIVATE_UPLOAD_DIR` | Optional | Persistent private payment screenshot directory |
-| `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Legacy only | Read existing screenshots stored in Supabase; new files do not use it |
+| `HACKMITTEN_STORAGE_ROOT` | Production | Persistent storage root, normally `/var/lib/hackmitten` |
+| `HM3_PUBLIC_UPLOAD_DIR`, `HM3_PRIVATE_UPLOAD_DIR` | Optional | Override the root's `public` and `private` subdirectories |
 | `PORT`, `HOSTNAME` | Optional | Standalone listener; production should bind loopback behind proxy |
 
 Generate secrets with an approved secret manager or cryptographically secure generator. Never commit populated environment files.
@@ -70,11 +69,11 @@ Copy the standalone directory to a versioned release directory. Do not copy `.en
 
 - `DATABASE_URL` and `DIRECT_URL`
 - `NEXTAUTH_URL` and `NEXTAUTH_SECRET`
-- `HM3_PUBLIC_UPLOAD_DIR=/var/lib/hackmitten/public`
-- `HM3_PRIVATE_UPLOAD_DIR=/var/lib/hackmitten/private`
+- `HACKMITTEN_STORAGE_ROOT=/var/lib/hackmitten`
+- Optional directory overrides: `HM3_PUBLIC_UPLOAD_DIR`, `HM3_PRIVATE_UPLOAD_DIR`
 - Resend settings when production email is enabled
 
-Give the service account read/execute access to the release and write access only to the two storage directories.
+Give the service account read/execute access to the release and write access only to the storage root. See [SETUP.md](SETUP.md) for the versioned offline bundle and full systemd/Nginx procedure.
 
 Before first startup or each release that contains migrations:
 
@@ -128,7 +127,7 @@ Source-controlled gallery, sponsor, coordinator, developing-team, and winner con
 
 ## Security and privacy
 
-- Never collect participant passport/student photographs.
+- Participant photos are optional, private, max 1 MiB, and require an authorized retrieval endpoint.
 - QR tokens are random opaque 192-bit values; the public pass includes pass details needed by the participant and omits college/contact information.
 - Payment screenshots are never served through public upload URLs.
 - Every sensitive API must keep server-side permission checks.

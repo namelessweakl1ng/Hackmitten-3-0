@@ -1,14 +1,14 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
+import sharp from "sharp";
 
-const UPLOAD_ROOT = path.resolve(process.env.HM3_PUBLIC_UPLOAD_DIR || path.join(process.cwd(), "storage", "public"));
-const PRIVATE_UPLOAD_ROOT = path.resolve(process.env.HM3_PRIVATE_UPLOAD_DIR || path.join(process.cwd(), "storage", "private"));
+const STORAGE_ROOT = path.resolve(process.env.HACKMITTEN_STORAGE_ROOT || path.join(process.cwd(), "storage"));
+const UPLOAD_ROOT = path.resolve(process.env.HM3_PUBLIC_UPLOAD_DIR || path.join(STORAGE_ROOT, "public"));
+const PRIVATE_UPLOAD_ROOT = path.resolve(process.env.HM3_PRIVATE_UPLOAD_DIR || path.join(STORAGE_ROOT, "private"));
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const PARTICIPANT_IMAGE_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_SIZE = 8 * 1024 * 1024;
-
-function supabaseStorageConfigured(): boolean {
-  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY);
-}
+export const MAX_PARTICIPANT_IMAGE_SIZE = 1_048_576;
 
 export class UploadError extends Error {
   statusCode = 400;
@@ -63,15 +63,45 @@ export function detectImageMime(head: Uint8Array): string | null {
   return null;
 }
 
-export async function validateImageFile(file: File): Promise<string> {
+function hasStrictImageBoundary(bytes: Uint8Array, mime: string): boolean {
+  if (mime === "image/jpeg") return bytes.length >= 4 && bytes.at(-2) === 0xff && bytes.at(-1) === 0xd9;
+  if (mime === "image/png") {
+    return bytes.length >= 20 && bytes.at(-12) === 0 && bytes.at(-11) === 0 && bytes.at(-10) === 0 && bytes.at(-9) === 0 &&
+      bytes.at(-8) === 0x49 && bytes.at(-7) === 0x45 && bytes.at(-6) === 0x4e && bytes.at(-5) === 0x44;
+  }
+  if (mime === "image/gif") return bytes.at(-1) === 0x3b;
+  if (mime === "image/webp") {
+    return bytes.length >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(4, true) + 8 === bytes.length;
+  }
+  return false;
+}
+
+export async function validateImageFile(file: File, options: { maxSize?: number; allowedMime?: Set<string> } = {}): Promise<string> {
+  const maxSize = options.maxSize ?? MAX_SIZE;
+  const allowedMime = options.allowedMime ?? ALLOWED_MIME;
   if (!file || file.size === 0) throw new UploadError("The selected image is empty.");
-  if (file.size > MAX_SIZE) throw new UploadError(`File too large (max ${Math.floor(MAX_SIZE / 1024 / 1024)}MB)`);
+  if (file.size > maxSize) throw new UploadError(`File too large (maximum ${maxSize} bytes)`);
   const detected = detectImageMime(new Uint8Array(await file.slice(0, 12).arrayBuffer()));
-  if (!detected || !ALLOWED_MIME.has(detected)) {
+  if (!detected || !allowedMime.has(detected)) {
     throw new UploadError("File content is not a supported image.");
   }
   if (file.type !== detected) {
     throw new UploadError("File content does not match the declared image type.");
+  }
+  try {
+    const bytes = Buffer.from(await file.arrayBuffer());
+    if (!hasStrictImageBoundary(bytes, detected)) {
+      throw new UploadError("The selected image is malformed or contains trailing data.");
+    }
+    const metadata = await sharp(bytes, { failOn: "error", limitInputPixels: 12_000_000 }).metadata();
+    if (!metadata.width || !metadata.height || metadata.format !== detected.slice("image/".length)) {
+      throw new UploadError("The selected image is malformed or does not match its declared type.");
+    }
+    await sharp(bytes, { failOn: "error", limitInputPixels: 12_000_000 }).stats();
+  } catch (error) {
+    if (error instanceof UploadError) throw error;
+    throw new UploadError("The selected image is malformed or cannot be decoded.");
   }
   return detected;
 }
@@ -92,6 +122,11 @@ export async function storePaymentScreenshot(opts: {
   return storeFileInternal(file, `pay_${paymentId}`, true);
 }
 
+export async function storeParticipantImage(file: File): Promise<StoredFile> {
+  const mime = await validateImageFile(file, { maxSize: MAX_PARTICIPANT_IMAGE_SIZE, allowedMime: PARTICIPANT_IMAGE_MIME });
+  return saveToLocal(file, safeName("participant", mime), true, mime);
+}
+
 async function storeFileInternal(
   file: File,
   prefix: string,
@@ -107,37 +142,21 @@ async function storeFileInternal(
   return saveToLocal(file, fileName, false, effectiveMime);
 }
 
-/**
- * Stream a private payment screenshot from Supabase Storage.
- * The bucket is private and this function uses the server-only Supabase client.
- */
-export async function getPrivateSupabaseStream(filePath: string): Promise<{
-  stream: ReadableStream<Uint8Array>;
-  contentType: string;
-} | null> {
-  const prefix = "supabase://payment-screenshots/";
+function privateFileName(relativePath: string): string | null {
+  if (!relativePath.startsWith("private://")) return null;
+  const fileName = relativePath.slice("private://".length);
+  return /^[a-z0-9_-]+_[a-f0-9]{12}\.(?:jpg|png|webp|gif)$/.test(fileName) ? fileName : null;
+}
 
-  if (!filePath.startsWith(prefix) || !supabaseStorageConfigured()) {
-    return null;
-  }
+export async function deletePrivateFile(relativePath: string): Promise<void> {
+  const fileName = privateFileName(relativePath);
+  if (fileName) await fs.rm(path.join(PRIVATE_UPLOAD_ROOT, fileName), { force: true });
+}
 
-  const storagePath = filePath.slice(prefix.length);
-
+export async function readPublicUpload(fileName: string): Promise<Buffer | null> {
+  if (!/^[a-z0-9_-]{1,40}_[a-f0-9]{12}\.(?:jpg|png|webp|gif)$/.test(fileName)) return null;
   try {
-    const { supabaseAdmin } = await import("@/lib/supabase-admin");
-
-    const { data, error } = await supabaseAdmin.storage
-      .from("payment-screenshots")
-      .download(storagePath);
-
-    if (error || !data) {
-      return null;
-    }
-
-    return {
-      stream: data.stream() as ReadableStream<Uint8Array>,
-      contentType: data.type || "application/octet-stream",
-    };
+    return await fs.readFile(path.join(UPLOAD_ROOT, fileName));
   } catch {
     return null;
   }
@@ -150,12 +169,13 @@ async function saveToLocal(
   mimeType: string,
 ): Promise<StoredFile> {
   if (isPrivate) {
-    await fs.mkdir(PRIVATE_UPLOAD_ROOT, { recursive: true });
+    await fs.mkdir(PRIVATE_UPLOAD_ROOT, { recursive: true, mode: 0o700 });
+    await fs.chmod(PRIVATE_UPLOAD_ROOT, 0o700);
 
     const abs = path.join(PRIVATE_UPLOAD_ROOT, fileName);
     const buf = await file.arrayBuffer();
 
-    await fs.writeFile(abs, Buffer.from(buf));
+    await fs.writeFile(abs, Buffer.from(buf), { flag: "wx", mode: 0o600 });
 
     return {
       relativePath: `private://${fileName}`,
@@ -167,12 +187,13 @@ async function saveToLocal(
     };
   }
 
-  await fs.mkdir(UPLOAD_ROOT, { recursive: true });
+  await fs.mkdir(UPLOAD_ROOT, { recursive: true, mode: 0o755 });
+  await fs.chmod(UPLOAD_ROOT, 0o755);
 
   const abs = path.join(UPLOAD_ROOT, fileName);
   const buf = await file.arrayBuffer();
 
-  await fs.writeFile(abs, Buffer.from(buf));
+  await fs.writeFile(abs, Buffer.from(buf), { flag: "wx", mode: 0o644 });
 
   return {
     relativePath: `/api/uploads/${fileName}`,
@@ -185,29 +206,18 @@ async function saveToLocal(
 }
 
 /**
- * Read a private payment screenshot from the local dev filesystem
- * (stored in .private-uploads/, NOT under public/).
+ * Read a private image from persistent storage. The caller must authorize access.
  */
-export async function readLocalPrivateFile(relativePath: string): Promise<{
+export async function readPrivateFile(relativePath: string): Promise<{
   data: Buffer;
   contentType: string;
 } | null> {
-  if (!relativePath.startsWith("private://")) {
-    return null;
-  }
-
-  const fileName = relativePath.slice("private://".length);
-  if (!/^[a-z0-9_-]+_[a-f0-9]{12}\.(?:jpg|png|webp|gif)$/.test(fileName)) return null;
+  const fileName = privateFileName(relativePath);
+  if (!fileName) return null;
   const abs = path.join(PRIVATE_UPLOAD_ROOT, fileName);
 
   try {
-    let data: Buffer;
-    try {
-      data = await fs.readFile(abs);
-    } catch {
-      // Read the former local directory for files uploaded before storage was centralized.
-      data = await fs.readFile(path.join(process.cwd(), ".private-uploads", fileName));
-    }
+    const data = await fs.readFile(abs);
     const ext = path.extname(fileName).toLowerCase();
 
     const contentType =

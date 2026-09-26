@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { storePaymentScreenshot, UploadError } from "@/lib/upload";
+import { deletePrivateFile, storePaymentScreenshot, UploadError } from "@/lib/upload";
 import { jsonError } from "@/lib/api-auth";
 
 /**
@@ -32,15 +32,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     const stored = await storePaymentScreenshot({ file, paymentId: team.payment.id });
-    const screenshot = await db.paymentScreenshot.create({
-      data: {
-        paymentId: team.payment.id,
-        filePath: stored.relativePath,
-        fileName: stored.fileName,
-        mimeType: stored.mimeType,
-        sizeBytes: stored.sizeBytes,
-      },
-    });
+    let screenshot;
+    try {
+      screenshot = await db.paymentScreenshot.create({
+        data: {
+          paymentId: team.payment.id,
+          filePath: stored.relativePath,
+          fileName: stored.fileName,
+          mimeType: stored.mimeType,
+          sizeBytes: stored.sizeBytes,
+        },
+      });
+    } catch (error) {
+      await deletePrivateFile(stored.relativePath);
+      throw error;
+    }
     return NextResponse.json({ screenshot }, { status: 201 });
   } catch (err) {
     if (err instanceof UploadError) {

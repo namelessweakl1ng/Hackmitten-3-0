@@ -7,7 +7,7 @@
 - Standalone Node.js artifact at `.next/standalone/`, supervised by systemd behind a TLS reverse proxy.
 - Persistent filesystem for new uploads: configured public and private directories. Public uploads stream through `/api/uploads/[fileName]`; payment screenshots stream only through the permission-protected admin endpoint.
 - Resend for configured production email.
-- Supabase client is retained only to read legacy screenshot objects from existing database rows. New uploads use the filesystem. Vercel Blob is not used.
+- No hosted storage client is included. All managed files use the configured Linux filesystem; participant images and payment screenshots are private.
 
 ## Build and database lifecycle
 
@@ -23,7 +23,7 @@ Build with `bun install --frozen-lockfile && bun run build` on Linux. Package `.
 
 ## Required runtime configuration
 
-`DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `HM3_PUBLIC_UPLOAD_DIR`, and `HM3_PRIVATE_UPLOAD_DIR`. Configure `RESEND_API_KEY` and `EMAIL_FROM` for production email. Bootstrap-only variables: `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `HM3_BERSERK_SECRET`. See `.env.example`.
+`DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, and `HACKMITTEN_STORAGE_ROOT`. Configure `RESEND_API_KEY` and `EMAIL_FROM` for production email. Bootstrap-only variables: `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `HM3_BERSERK_SECRET`. See `.env.example`.
 
 ## Operations
 
@@ -41,4 +41,4 @@ Build with `bun install --frozen-lockfile && bun run build` on Linux. Package `.
 - `tests`: Bun unit tests and optional PostgreSQL integration tests.
 - `deploy/hackmitten.service`: systemd unit template.
 
-No passport/student image collection is implemented. Demo seeding is development-only and must not be run in production.
+Optional private participant photos are supported at a 1 MiB maximum. Demo seeding is development-only and must not be run in production.

@@ -5,6 +5,7 @@ import { jsonError } from "@/lib/api-auth";
 import { computeEventState, getEventState } from "@/lib/event-state";
 import { normalizeTeamName } from "@/lib/team-name";
 import { attemptRegistrationAcknowledgement } from "@/lib/registration-acknowledgement";
+import { deletePrivateFile, storeParticipantImage, UploadError } from "@/lib/upload";
 
 type RawQueryClient = Pick<typeof db, "$queryRaw">;
 
@@ -32,6 +33,7 @@ async function findTeamWithNormalizedName(client: RawQueryClient, normalizedName
  *   - Unique team name (DB constraint)
  */
 export async function POST(req: Request) {
+  const storedParticipantImages: Array<{ relativePath: string; mimeType: string; sizeBytes: number }> = [];
   try {
     // ─── Registration deadline enforcement (single source of truth) ──────
     const eventState = await getEventState();
@@ -58,7 +60,32 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json();
+    const contentLength = Number(req.headers.get("content-length") ?? 0);
+    if (contentLength > 4 * 1_048_576 + 32_768) {
+      return NextResponse.json({ error: "Registration upload is too large." }, { status: 413 });
+    }
+    let body: unknown;
+    const files: Array<File | null> = [];
+    if (req.headers.get("content-type")?.includes("multipart/form-data")) {
+      try {
+        const form = await req.formData();
+        const registration = form.get("registration");
+        if (typeof registration !== "string") return NextResponse.json({ error: "Registration details are required." }, { status: 400 });
+        body = JSON.parse(registration);
+        for (let i = 0; i < 4; i++) {
+          const value = form.get(`participantImage${i}`);
+          if (value !== null && !(value instanceof File)) return NextResponse.json({ error: "Invalid participant image upload." }, { status: 400 });
+          files.push(value instanceof File && value.size > 0 ? value : null);
+        }
+        if ([...form.keys()].some((key) => key.startsWith("participantImage") && !/^participantImage[0-3]$/.test(key))) {
+          return NextResponse.json({ error: "Invalid participant image field." }, { status: 400 });
+        }
+      } catch {
+        return NextResponse.json({ error: "Malformed registration upload." }, { status: 400 });
+      }
+    } else {
+      body = await req.json();
+    }
     const parsed = registrationSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -68,7 +95,9 @@ export async function POST(req: Request) {
     }
     const { teamName, college } = parsed.data;
     const members = normalizeRegistrationMembers(parsed.data.members);
-
+    if (files.some((file, index) => file && index >= members.length)) {
+      return NextResponse.json({ error: "Image supplied for a missing team member." }, { status: 400 });
+    }
     const normalizedTeamName = normalizeTeamName(teamName);
     if (normalizedTeamName.length < 2) {
       return NextResponse.json(
@@ -86,10 +115,24 @@ export async function POST(req: Request) {
       );
     }
 
+    const participantImages: Array<Awaited<ReturnType<typeof storeParticipantImage>> | null> = [];
+    for (let index = 0; index < members.length; index++) {
+      const file = files[index];
+      if (!file) {
+        participantImages.push(null);
+        continue;
+      }
+      const stored = await storeParticipantImage(file);
+      storedParticipantImages.push(stored);
+      participantImages.push(stored);
+    }
+
     // ─── Transaction: re-check capacity atomically + create team ────────
     // Re-counting inside the transaction prevents the race where two registrations
     // slip through the capacity check simultaneously.
-    const team = await db.$transaction(async (tx) => {
+    let team;
+    try {
+      team = await db.$transaction(async (tx) => {
       // Serialize capacity checks so distinct team names cannot exceed the limit.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('hackmitten-registration-capacity'))`;
       // Serialize submissions for the same canonical name so equivalent names
@@ -122,23 +165,41 @@ export async function POST(req: Request) {
           college: college ?? members[0]?.college ?? null,
           status: "SUBMITTED",
           members: {
-            create: members.map((m) => ({
+            create: members.map((m, index) => ({
               fullName: m.fullName,
               email: m.email.toLowerCase().trim(),
               phone: m.phone.trim(),
               college: m.college,
               degree: m.degree || null,
+              participantImagePath: participantImages[index]?.relativePath ?? null,
+              participantImageMimeType: participantImages[index]?.mimeType ?? null,
+              participantImageSizeBytes: participantImages[index]?.sizeBytes ?? null,
               isLeader: m.isLeader,
             })),
           },
         },
         include: { members: true },
       });
-    });
+      });
+    } catch (error) {
+      await Promise.all(storedParticipantImages.map((file) => deletePrivateFile(file.relativePath)));
+      throw error;
+    }
 
     const acknowledgementEmailSent = await attemptRegistrationAcknowledgement(team.id);
-    return NextResponse.json({ team, acknowledgementEmailSent }, { status: 201 });
+    const publicTeam = {
+      ...team,
+      members: team.members.map(({ participantImagePath: _path, participantImageMimeType: _mime, participantImageSizeBytes: _size, ...member }) => member),
+    };
+    return NextResponse.json({ team: publicTeam, acknowledgementEmailSent }, { status: 201 });
   } catch (err) {
+    if (err instanceof UploadError) {
+      await Promise.all(storedParticipantImages.map((file) => deletePrivateFile(file.relativePath)));
+      return NextResponse.json({ error: err.message }, { status: err.statusCode });
+    }
+    if (storedParticipantImages.length) {
+      await Promise.all(storedParticipantImages.map((file) => deletePrivateFile(file.relativePath)));
+    }
     if (err instanceof Error && err.message === "TEAM_NAME_TAKEN") {
       return NextResponse.json(
         { error: "Team name already exists. Please choose a different team name.", code: "TEAM_NAME_TAKEN" },

@@ -4,6 +4,7 @@ import { requirePermission, jsonError } from "@/lib/api-auth";
 import { writeAudit } from "@/lib/audit";
 import { recordChange, snapshotRow } from "@/lib/change-history";
 import { z } from "zod";
+import { deletePrivateFile } from "@/lib/upload";
 
 /**
  * PATCH /api/admin/teams/:id
@@ -48,13 +49,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         return NextResponse.json({ error: "Invalid members", issues: parsed.error.issues }, { status: 400 });
       }
       // Transactional member update
+      const newMemberIds = parsed.data.filter((m) => m.id).map((m) => m.id!);
+      const removedImagePaths = team.members
+        .filter((member) => !newMemberIds.includes(member.id) && member.participantImagePath)
+        .map((member) => member.participantImagePath!);
       await db.$transaction(async (tx) => {
         if (Object.keys(updateData).length > 0) {
           await tx.team.update({ where: { id }, data: updateData });
         }
 
         // Delete members not in the new list
-        const newMemberIds = parsed.data.filter((m) => m.id).map((m) => m.id!);
         await tx.participant.deleteMany({
           where: { teamId: id, id: { notIn: newMemberIds } },
         });
@@ -88,6 +92,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           }
         }
       });
+      await Promise.allSettled(removedImagePaths.map(deletePrivateFile));
     } else if (Object.keys(updateData).length > 0) {
       await db.team.update({ where: { id }, data: updateData });
     }
@@ -164,6 +169,11 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
     // Delete the team — cascades handle participants, payments, screenshots, food check-ins
     await db.team.delete({ where: { id } });
+    const privateFiles = [
+      ...team.members.map((member) => member.participantImagePath),
+      ...(team.payment?.screenshots.map((screenshot) => screenshot.filePath) ?? []),
+    ].filter((filePath): filePath is string => Boolean(filePath?.startsWith("private://")));
+    await Promise.allSettled(privateFiles.map(deletePrivateFile));
 
     return NextResponse.json({ success: true });
   } catch (err) {

@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { requirePermission, jsonError } from "@/lib/api-auth";
+import { csvDocument } from "@/lib/csv";
 
 /**
  * GET /api/admin/export
@@ -26,15 +27,23 @@ export async function GET() {
         "member1_name",
         "member1_email",
         "member1_phone",
+        "member1_college",
+        "member1_degree",
         "member2_name",
         "member2_email",
         "member2_phone",
+        "member2_college",
+        "member2_degree",
         "member3_name",
         "member3_email",
         "member3_phone",
+        "member3_college",
+        "member3_degree",
         "member4_name",
         "member4_email",
         "member4_phone",
+        "member4_college",
+        "member4_degree",
         "paymentStatus",
         "transactionId",
         "paymentVerifiedBy",
@@ -45,43 +54,39 @@ export async function GET() {
 
     for (const t of teams) {
       const row: string[] = [
-        csv(t.teamName),
-        csv(t.registrationId ?? ""),
-        csv(t.status),
-        csv(t.college ?? ""),
+        t.teamName,
+        t.registrationId ?? "",
+        t.status,
+        t.college ?? "",
       ];
       for (let i = 0; i < 4; i++) {
         const m = t.members[i];
         if (m) {
-          row.push(csv(m.fullName), csv(m.email), csv(m.phone));
+          row.push(m.fullName, m.email, m.phone, m.college, m.degree ?? "");
         } else {
-          row.push("", "", "");
+          row.push("", "", "", "", "");
         }
       }
       row.push(
-        csv(t.payment?.status ?? "NONE"),
-        csv(t.payment?.transactionId ?? ""),
-        csv(t.payment?.verifiedBy?.email ?? ""),
-        csv(t.payment?.verifiedAt?.toISOString() ?? ""),
-        csv(t.createdAt.toISOString()),
+        t.payment?.status ?? "NONE",
+        t.payment?.transactionId ?? "",
+        t.payment?.verifiedBy?.email ?? "",
+        t.payment?.verifiedAt?.toISOString() ?? "",
+        t.createdAt.toISOString(),
       );
       rows.push(row);
     }
 
-    const csvText = rows.map((r) => r.join(",")).join("\n");
+    const csvText = csvDocument(rows);
     return new Response(csvText, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
         "Content-Disposition": `attachment; filename="hackmitten-registrations-${new Date().toISOString().slice(0, 10)}.csv"`,
       },
     });
   } catch (err) {
     return jsonError(err);
   }
-}
-
-function csv(s: string | null | undefined): string {
-  if (s == null) return "";
-  const needs = /[",\n\r]/.test(s);
-  return needs ? `"${s.replace(/"/g, '""')}"` : s;
 }

@@ -1,10 +1,5 @@
-import path from "node:path";
-import { promises as fs } from "node:fs";
 import { NextResponse } from "next/server";
-
-const uploadRoot = path.resolve(
-  process.env.HM3_PUBLIC_UPLOAD_DIR || path.join(process.cwd(), "storage", "public"),
-);
+import { readPublicUpload } from "@/lib/upload";
 const extensionTypes: Record<string, string> = {
   jpg: "image/jpeg",
   png: "image/png",
@@ -19,10 +14,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ fil
   }
 
   try {
-    const filePath = path.join(uploadRoot, fileName);
-    const contents = await fs.readFile(filePath);
-    const extension = path.extname(fileName).slice(1);
-    return new Response(contents, {
+    const contents = await readPublicUpload(fileName);
+    if (!contents) return NextResponse.json({ error: "File not found" }, { status: 404 });
+    const extension = fileName.slice(fileName.lastIndexOf(".") + 1);
+    return new Response(new Uint8Array(contents), {
       headers: {
         "Content-Type": extensionTypes[extension],
         "X-Content-Type-Options": "nosniff",

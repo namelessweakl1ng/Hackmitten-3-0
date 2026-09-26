@@ -17,6 +17,7 @@ type Team = {
   members: {
     id: string; fullName: string; email: string; phone: string; college: string;
     degree: string | null;
+    participantImagePath: string | null;
     participantId: string | null; qrToken: string | null; passVerified: boolean; isLeader: boolean;
   }[];
   payment: {
@@ -201,6 +202,7 @@ export function AdminRegistrationDetail({ id }: { id: string }) {
         <div className="space-y-3">
           {team.members.map((m, i) => (
             <div key={m.id} className={`flex items-start gap-3 pb-3 border-b border-white/5 last:border-0 last:pb-0 ${m.isLeader ? "bg-[#B52A32]/5 -mx-2 px-2 rounded" : ""}`}>
+              {m.participantImagePath && <img src={`/api/admin/participants/${m.id}/image`} alt={`${m.fullName} participant photo`} className="h-16 w-16 rounded object-cover" />}
               <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full mono text-xs ${
                 m.isLeader ? "bg-[#B52A32] text-white" : "bg-[#151515] text-[#B52A32]"
               }`}>

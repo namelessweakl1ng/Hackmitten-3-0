@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requirePermission, jsonError } from "@/lib/api-auth";
-import { getPrivateSupabaseStream, readLocalPrivateFile } from "@/lib/upload";
+import { readPrivateFile } from "@/lib/upload";
 
 /**
  * GET /api/admin/payments/:id/screenshot
@@ -35,24 +35,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const screenshot = payment.screenshots[0];
     const filePath = screenshot.filePath;
 
-    // Path A: Supabase private object — stream through the server-side client.
-    if (filePath.startsWith("supabase://payment-screenshots/")) {
-      const result = await getPrivateSupabaseStream(filePath);
-      if (!result) {
-        return NextResponse.json({ error: "Screenshot not found in storage" }, { status: 404 });
-      }
-      return new Response(result.stream, {
-        headers: {
-          "Content-Type": result.contentType,
-          "X-Content-Type-Options": "nosniff",
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
-      });
-    }
-
-    // Path B: Local development — file stored in .private-uploads/ (outside public/)
+    // Private files are read only from the configured persistent storage root.
     if (filePath.startsWith("private://")) {
-      const result = await readLocalPrivateFile(filePath);
+      const result = await readPrivateFile(filePath);
       if (!result) {
         return NextResponse.json({ error: "Screenshot file not found" }, { status: 404 });
       }
