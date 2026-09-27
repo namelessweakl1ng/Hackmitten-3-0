@@ -6,7 +6,7 @@ type BootstrapDatabase = Pick<typeof db, "eventConfig" | "user">;
 export const DEFAULT_EVENT_CONFIG = {
   id: "singleton",
   registrationEnabled: true,
-  registrationLimit: 60,
+  registrationLimit: 50,
 } as const;
 
 export async function ensureSingletonEventConfig(database: BootstrapDatabase = db) {

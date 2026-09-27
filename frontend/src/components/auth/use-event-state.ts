@@ -13,7 +13,6 @@ export interface EventStateInfo {
   state: EventState;
   eventStartIso: string | null;
   eventEndIso: string | null;
-  registrationDeadlineIso: string | null;
   registrationOpensIso: string | null;
   durationHours: number;
   timezone: string;

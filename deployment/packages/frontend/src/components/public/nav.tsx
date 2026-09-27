@@ -10,7 +10,7 @@ export function PublicNav() {
   const [scrolled, setScrolled] = useState(false);
   const eventState = useEventState();
   const regOpen = eventState.data?.registrationOpen ?? true;
-  // Registration is "full" when state is REGISTRATION_OPEN (deadline not passed) but either
+  // Registration is unavailable when the admin has closed it or capacity is reached.
   // the manual toggle is off (registrationsOpen=false) OR capacity has been reached.
   const isFull =
     !!eventState.data &&

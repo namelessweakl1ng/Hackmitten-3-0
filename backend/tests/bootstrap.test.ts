@@ -55,6 +55,7 @@ describe("production bootstrap", () => {
     const config = await ensureSingletonEventConfig(state.database);
 
     expect(config).toEqual(DEFAULT_EVENT_CONFIG);
+    expect(config.registrationLimit).toBe(50);
     expect(state.getEventCreates()).toBe(1);
   });
 

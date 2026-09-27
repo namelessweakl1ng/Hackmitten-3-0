@@ -7,7 +7,7 @@ import { useEventState } from "@/components/auth/use-event-state";
 export function Hero() {
   const eventState = useEventState();
   const regOpen = eventState.data?.registrationOpen ?? false; // fail closed while loading/error
-  // Registration is "full" when state is REGISTRATION_OPEN (deadline not passed) but either
+  // Registration is unavailable when the admin has closed it or capacity is reached.
   // the manual toggle is off (registrationsOpen=false) OR capacity has been reached.
   const isFull =
     !!eventState.data &&

@@ -13,7 +13,7 @@ export const DEVELOPING_TEAM: DevelopingTeamMember[] = [
     id: "developer-1",
     name: "Manjunath P",
     role: "Developer",
-    image: "/images/developers/person1.png",
+    image: "/images/developers/manjuanath.jpeg",
     linkedin: "https://www.linkedin.com/in/manjunatha67p/",
     github: "https://github.com/namelessweakl1ng",
   },
@@ -34,10 +34,17 @@ export const DEVELOPING_TEAM: DevelopingTeamMember[] = [
     github: "https://github.com/sharath-6363",
   },
   {
+    id: "developer-5",
+    name: "Jasim Hussain",
+    role: "Developer",
+    image: "/images/developers/jasim.jpeg",
+    linkedin: "https://www.linkedin.com/in/jasim-hussaain?utm_source=share_via&utm_content=profile&utm_medium=member_ios",
+    github: "https://github.com/jasimk786",
+  },
+  {
     id: "developer-4",
     name: "Harshith H R",
     role: "Design & Content",
-    image: "/images/developers/person4.png",
+    image: "/images/developers/harshith.jpeg",
     phone: "8296338351",
-  },
-];
+  },];

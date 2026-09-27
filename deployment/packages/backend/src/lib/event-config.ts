@@ -7,7 +7,6 @@ export const HACKMITTEN_EVENT = {
   startTime: "11:00",
   durationHours: 24,
   timezone: "Asia/Kolkata",
-  registrationDeadline: "2026-10-22T11:00:00+05:30",
   registrationFee: "\u20b91,000",
   prizePool: "\u20b91,00,000",
   teamSize: "3\u20144",

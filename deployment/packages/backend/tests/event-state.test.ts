@@ -27,12 +27,12 @@ describe("computeEventState", () => {
     expect(state.registrationOpen).toBe(true);
   });
 
-  it("returns REGISTRATION_CLOSED when now is after deadline but before event start", () => {
+  it("stays open after the legacy deadline while the event has not started", () => {
     const now = new Date("2026-10-22T12:00:00Z");
     const state = computeEventState(baseConfig, now);
-    expect(state.state).toBe("REGISTRATION_CLOSED");
-    expect(state.registrationOpen).toBe(false);
-    expect(state.registrationMessage).toContain("closed");
+    expect(state.state).toBe("REGISTRATION_OPEN");
+    expect(state.registrationOpen).toBe(true);
+    expect(state.registrationAvailable).toBe(true);
   });
 
   it("returns LIVE when now is between event start and end", () => {
@@ -83,14 +83,6 @@ describe("computeEventState", () => {
 
     expect(state.eventStartIso).toBe("2026-10-29T05:30:00.000Z");
     expect(state.eventEndIso).toBe("2026-10-30T05:30:00.000Z");
-  });
-
-  it("keeps the registration deadline independently configurable", () => {
-    const state = computeEventState(baseConfig);
-
-    expect(state.registrationDeadlineIso).toBe(
-      "2026-10-22T05:30:00.000Z",
-    );
   });
 
   it("handles timezone field correctly", () => {

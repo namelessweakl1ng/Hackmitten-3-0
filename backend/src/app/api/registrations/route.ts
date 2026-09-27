@@ -24,7 +24,6 @@ async function findTeamWithNormalizedName(client: RawQueryClient, normalizedName
  * POST /api/registrations
  * Create a new team registration (status = SUBMITTED).
  * Enforces:
- *   - Registration deadline (server-side via event-state single source of truth): returns 403 if past deadline
  *   - registrationsOpen toggle (EventConfig) — if false, returns 403
  *   - Registration capacity (EventConfig) — if at capacity, returns 403
  *   - 3-4 members
@@ -36,7 +35,7 @@ async function findTeamWithNormalizedName(client: RawQueryClient, normalizedName
 export async function POST(req: Request) {
   const storedParticipantImages: Array<{ relativePath: string; mimeType: string; sizeBytes: number }> = [];
   try {
-    // ─── Registration deadline enforcement (single source of truth) ──────
+    // ─── Event lifecycle enforcement ───────────────────────────────────
     const eventState = await getEventState();
     if (!eventState.registrationOpen) {
       return NextResponse.json(

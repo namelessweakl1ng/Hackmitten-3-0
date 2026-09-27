@@ -22,13 +22,13 @@ export default function RegisterPage() {
   const regOpen = eventState.data?.registrationOpen;
   const loading = eventState.isLoading;
   const registrationsOpen = eventState.data?.registrationsOpen ?? true;
-  const registrationCapacity = eventState.data?.registrationCapacity ?? 60;
+  const registrationCapacity = eventState.data?.registrationCapacity ?? 50;
   const currentCount = eventState.data?.currentCount ?? 0;
   const isFull =
     !!eventState.data &&
     registrationCapacity > 0 &&
     currentCount >= registrationCapacity;
-  // Manual close (toggle off) — only meaningful if registration deadline hasn't passed
+  // Manual close (toggle off) is controlled by the admin.
   const manuallyClosed = !!eventState.data && !registrationsOpen && regOpen !== false;
 
   // While loading event state, show a neutral state (don't flash closed)
@@ -108,7 +108,7 @@ export default function RegisterPage() {
     );
   }
 
-  // If registration is closed (deadline passed), show a clean closed state
+  // If registration is manually closed, show a clean closed state
   if (regOpen === false && !continuingRegistration) {
     return (
       <main className="relative min-h-screen bg-[#030303] text-white flex items-center justify-center px-5">
@@ -129,7 +129,7 @@ export default function RegisterPage() {
             <span className="text-[#B52A32]">CLOSED.</span>
           </h1>
           <p className="text-[#A8A8A8] mb-8">
-            {eventState.data?.registrationMessage || "The registration deadline has passed."}
+            {eventState.data?.registrationMessage || "Registrations are currently closed. Please check back later."}
           </p>
           <Link
             href="/"

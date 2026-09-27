@@ -7,7 +7,6 @@ const EVENT_STATIC = {
   eventStartTime: HACKMITTEN_EVENT.startTime,
   eventTimezone: HACKMITTEN_EVENT.timezone,
   eventDurationHours: HACKMITTEN_EVENT.durationHours,
-  registrationDeadline: HACKMITTEN_EVENT.registrationDeadline,
 };
 
 /**
@@ -17,7 +16,7 @@ const EVENT_STATIC = {
  * States (in chronological order):
  *   UPCOMING          — before registration opens
  *   REGISTRATION_OPEN — registration open, event not started
- *   REGISTRATION_CLOSED — registration deadline passed, event not started yet
+ *   REGISTRATION_CLOSED — reserved for compatibility; manual controls govern registration
  *   LIVE              — event is currently running
  *   ENDED             — event end time has passed
  */
@@ -34,9 +33,7 @@ export interface EventStateInfo {
   eventStartIso: string | null;
   /** ISO string of event end */
   eventEndIso: string | null;
-  /** ISO string of registration deadline */
-  registrationDeadlineIso: string | null;
-  /** ISO string of registration open (defaults to "now" if not set, meaning always open until deadline) */
+  /** ISO string of registration open (is unused; registration is controlled by the admin toggle and capacity) */
   registrationOpensIso: string | null;
   /** Duration in hours */
   durationHours: number;
@@ -70,7 +67,6 @@ export function computeEventState(cfg: {
   eventEndTime?: string | null;
   eventTimezone?: string | null;
   eventDurationHours?: number | null;
-  registrationDeadline?: string | null;
   registrationOpens?: string | null;
   registrationsOpen?: boolean | null;
   registrationCapacity?: number | null;
@@ -90,7 +86,6 @@ export function computeEventState(cfg: {
   const eventEndIso = eventStartIso
     ? new Date(new Date(eventStartIso).getTime() + durationHours * 3600000).toISOString()
     : null;
-  const registrationDeadlineIso = cfg.registrationDeadline || null;
   const registrationOpensIso = cfg.registrationOpens || null;
 
   let state: EventState = "UPCOMING";
@@ -99,16 +94,12 @@ export function computeEventState(cfg: {
   const nowMs = now.getTime();
   const startMs = eventStartIso ? new Date(eventStartIso).getTime() : NaN;
   const endMs = eventEndIso ? new Date(eventEndIso).getTime() : NaN;
-  const deadlineMs = registrationDeadlineIso ? new Date(registrationDeadlineIso).getTime() : NaN;
   const opensMs = registrationOpensIso ? new Date(registrationOpensIso).getTime() : NaN;
 
   if (!isNaN(endMs) && nowMs >= endMs) {
     state = "ENDED";
   } else if (!isNaN(startMs) && nowMs >= startMs) {
     state = "LIVE";
-  } else if (!isNaN(deadlineMs) && nowMs >= deadlineMs) {
-    state = "REGISTRATION_CLOSED";
-    registrationMessage = "Registration is closed.";
   } else if (!isNaN(opensMs) && nowMs < opensMs) {
     state = "UPCOMING";
     registrationMessage = "Registration opens soon.";
@@ -129,7 +120,6 @@ export function computeEventState(cfg: {
     state,
     eventStartIso,
     eventEndIso,
-    registrationDeadlineIso,
     registrationOpensIso,
     durationHours,
     timezone,
@@ -155,7 +145,6 @@ export async function getEventState(
       state: "UPCOMING",
       eventStartIso: null,
       eventEndIso: null,
-      registrationDeadlineIso: null,
       registrationOpensIso: null,
       durationHours: 24,
       timezone: "Asia/Kolkata",

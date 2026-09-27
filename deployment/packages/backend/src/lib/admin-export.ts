@@ -124,7 +124,7 @@ export function adminExportRows(teams: AdminExportTeam[]): string[][] {
       team.teamName,
       team.registrationId ?? "",
       team.status,
-      team.college ?? "",
+      team.college ?? team.members.find((member) => member.isLeader)?.college ?? team.members[0]?.college ?? "",
       String(team.members.length),
       iso(team.createdAt),
       iso(team.updatedAt),

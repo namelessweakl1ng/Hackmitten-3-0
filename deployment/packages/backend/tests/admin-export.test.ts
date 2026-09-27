@@ -5,7 +5,7 @@ import { csvDocument } from "@/lib/csv";
 const createdAt = new Date("2026-09-01T10:30:00.000Z");
 const updatedAt = new Date("2026-09-02T11:45:00.000Z");
 
-function makeMember(index: number): AdminExportTeam["members"][number] {
+function makeMember(index: number, overrides: Partial<AdminExportTeam["members"][number]> = {}): AdminExportTeam["members"][number] {
   return {
     id: "member-" + index,
     fullName: "Participant " + index,
@@ -20,6 +20,7 @@ function makeMember(index: number): AdminExportTeam["members"][number] {
     participantImagePath: index === 1 ? "private://participant-images/photo-1.jpg" : null,
     participantImageMimeType: index === 1 ? "image/jpeg" : null,
     participantImageSizeBytes: index === 1 ? 12345 : null,
+    ...overrides,
   };
 }
 
@@ -116,6 +117,7 @@ describe("admin CSV export", () => {
       registrationAcknowledgementSentAt: null,
       rejectionEmailSentAt: null,
       payment: null,
+      members: [makeMember(1, { college: null }), makeMember(2, { college: null }), makeMember(3, { college: null })],
     })]);
     expect(rows[1]).toHaveLength(rows[0].length);
     for (const header of rows[0].filter((name) => name.startsWith("member4_") || name.startsWith("payment"))) {
@@ -173,6 +175,17 @@ describe("admin CSV export", () => {
       expect(csv).not.toContain(secret);
     }
     expect(cell(adminExportRows([team]), 1, "member1_hasImage")).toBe("true");
+  });
+
+  it("falls back to the leader college when the team college is empty", () => {
+    const team = makeTeam(1, {
+      college: null,
+      members: [makeMember(1, { isLeader: true, college: "Maharaja Institute" })],
+    });
+
+    const rows = adminExportRows([team]);
+
+    expect(cell(rows, 1, "college")).toBe("Maharaja Institute");
   });
 
   it("adds slots for anomalous teams with more than four members", () => {

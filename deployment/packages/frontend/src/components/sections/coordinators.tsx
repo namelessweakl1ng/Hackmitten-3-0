@@ -1,12 +1,13 @@
 "use client";
 
 import {
-  ChevronDown,
   Github,
   Linkedin,
+  Mail,
   Phone,
+  X,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef } from "react";
 
 import { COORDINATORS } from "@/data/coordinators";
 import { DEVELOPING_TEAM } from "@/data/developing-team";
@@ -169,7 +170,7 @@ function CoordinatorGroup({
       </div>
 
       {/* Coordinator cards */}
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 md:gap-4 lg:gap-6">
+      <div className="grid grid-cols-4 gap-1 sm:grid-cols-4 sm:gap-3 md:gap-4 lg:gap-6">
         {coordinators.map((coordinator) => (
           <CoordinatorCard
             key={coordinator.id}
@@ -190,57 +191,29 @@ function CoordinatorCard({
 }: {
   coordinator: Coordinator;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const hasContact = Boolean(coordinator.email || coordinator.phone);
 
-  const hasContact = Boolean(
-    coordinator.email || coordinator.phone
-  );
+  function openContact() {
+    if (hasContact) dialogRef.current?.showModal();
+  }
 
   return (
     <article
       className={`group relative overflow-hidden rounded-lg glass glass-hover transition-all duration-300 ${
-        coordinator.isLead
-          ? "md:col-span-2 md:row-span-1"
-          : ""
-      } ${
-        expanded
-          ? "ring-1 ring-[#B52A32]/50 sm:ring-0"
-          : ""
+        coordinator.isLead ? "md:col-span-2 md:row-span-1" : ""
       }`}
     >
       <button
         type="button"
-        onClick={() => {
-          if (
-            hasContact &&
-            window.matchMedia("(max-width: 639px)").matches
-          ) {
-            setExpanded((current) => !current);
-          }
-        }}
-        aria-expanded={
-          hasContact ? expanded : undefined
-        }
-        aria-controls={
-          hasContact
-            ? `coordinator-contact-${coordinator.id}`
-            : undefined
-        }
-        aria-label={
-          hasContact
-            ? `${
-                expanded ? "Hide" : "Show"
-              } contact details for ${coordinator.name}`
-            : coordinator.name
-        }
-        className="block w-full text-left"
+        onClick={openContact}
+        disabled={!hasContact}
+        aria-label={hasContact ? `View contact details for ${coordinator.name}` : coordinator.name}
+        className="block w-full text-left disabled:cursor-default"
       >
-        {/* Photo */}
         <div
           className={`relative overflow-hidden ${
-            coordinator.isLead
-              ? "aspect-[16/10]"
-              : "aspect-[4/5] sm:aspect-[4/5]"
+            coordinator.isLead ? "aspect-[16/10]" : "aspect-[4/5]"
           }`}
         >
           {coordinator.photoUrl ? (
@@ -262,10 +235,8 @@ function CoordinatorCard({
             </div>
           )}
 
-          {/* Dark gradient */}
           <div className="absolute inset-0 bg-gradient-to-t from-[#030303] via-transparent to-transparent" />
 
-          {/* Lead badge */}
           {coordinator.isLead && (
             <div className="absolute left-3 top-3 border border-[#B52A32] bg-black/60 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-[#B52A32] backdrop-blur">
               Lead
@@ -273,70 +244,78 @@ function CoordinatorCard({
           )}
         </div>
 
-        {/* Details */}
         <div className="p-1.5 sm:p-3 md:p-4 lg:p-5">
-          <h3 className="display break-words text-[10px] font-semibold leading-tight tracking-tight text-white sm:text-sm md:text-base lg:text-lg">
+          <h3 className="display break-words text-[9px] font-semibold leading-tight tracking-tight text-white sm:text-sm md:text-base lg:text-lg">
             {coordinator.name}
           </h3>
-
-          <div className="mt-1 break-words text-[8px] leading-tight text-[#B52A32] sm:text-xs">
+          <div className="mt-1 break-words text-[7px] leading-tight text-[#B52A32] sm:text-xs">
             {coordinator.role}
           </div>
-
-          {coordinator.type === "FACULTY" &&
-            coordinator.qualification && (
-              <div className="mt-1 break-words text-[9px] leading-tight text-[#A8A8A8] sm:text-[10px] md:text-[11px]">
-                {coordinator.qualification}
-              </div>
-            )}
-
+          {coordinator.type === "FACULTY" && coordinator.qualification && (
+            <div className="mt-1 break-words text-[8px] leading-tight text-[#A8A8A8] sm:text-[10px] md:text-[11px]">
+              {coordinator.qualification}
+            </div>
+          )}
           {coordinator.department && (
-            <div className="mt-1 break-words text-[9px] leading-tight text-[#A8A8A8] sm:text-[10px] md:text-[11px]">
+            <div className="mt-1 break-words text-[8px] leading-tight text-[#A8A8A8] sm:text-[10px] md:text-[11px]">
               {coordinator.department}
             </div>
           )}
-
-          {/* Mobile contact toggle */}
           {hasContact && (
-            <div className="mono mt-2 flex items-center gap-1 text-[8px] uppercase tracking-widest text-[#B52A32] sm:hidden">
-              Contact
-              <ChevronDown
-                size={11}
-                className={`transition-transform ${
-                  expanded ? "rotate-180" : ""
-                }`}
-              />
+            <div className="mono mt-2 text-[7px] uppercase tracking-widest text-[#B52A32] sm:text-[9px]">
+              View contact
             </div>
           )}
         </div>
       </button>
 
-      {/* Contact information */}
       {hasContact && (
-        <div
-          id={`coordinator-contact-${coordinator.id}`}
-          className={`${
-            expanded ? "block" : "hidden"
-          } mt-3 space-y-1 border-t border-white/5 px-1.5 pt-3 sm:block sm:-mt-2 sm:px-3 md:px-4 lg:px-5`}
+        <dialog
+          ref={dialogRef}
+          aria-labelledby={`coordinator-dialog-title-${coordinator.id}`}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) dialogRef.current?.close();
+          }}
+          className="fixed left-1/2 top-1/2 m-0 w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-white/15 bg-[#0b0708] p-0 text-white shadow-2xl backdrop:bg-black/80"
         >
-          {coordinator.email && (
-            <a
-              href={`mailto:${coordinator.email}`}
-              className="block max-w-full break-words text-[10px] text-[#A8A8A8] transition-colors hover:text-white sm:text-[11px]"
+          <div className="relative p-6 sm:p-8">
+            <button
+              type="button"
+              onClick={() => dialogRef.current?.close()}
+              aria-label="Close contact details"
+              className="absolute right-4 top-4 rounded-full p-2 text-[#A8A8A8] transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-[#F07C84]"
             >
-              {coordinator.email}
-            </a>
-          )}
-
-          {coordinator.phone && (
-            <a
-              href={`tel:${coordinator.phone}`}
-              className="block text-[10px] text-[#A8A8A8] transition-colors hover:text-white sm:text-[11px]"
-            >
-              {coordinator.phone}
-            </a>
-          )}
-        </div>
+              <X size={18} />
+            </button>
+            <div className="mono mb-3 text-[10px] uppercase tracking-[0.3em] text-[#E07179]">
+              Coordinator contact
+            </div>
+            <h3 id={`coordinator-dialog-title-${coordinator.id}`} className="display pr-8 text-2xl font-bold">
+              {coordinator.name}
+            </h3>
+            <p className="mt-2 text-sm text-[#E07179]">{coordinator.role}</p>
+            <div className="mt-7 space-y-3 border-t border-white/10 pt-5">
+              {coordinator.email && (
+                <a
+                  href={`mailto:${coordinator.email}`}
+                  className="flex items-center gap-3 rounded-lg border border-white/10 px-3 py-3 text-sm text-[#D6C8C8] transition-colors hover:border-[#B52A32] hover:text-white"
+                >
+                  <Mail size={16} className="shrink-0 text-[#E07179]" />
+                  <span className="break-all">{coordinator.email}</span>
+                </a>
+              )}
+              {coordinator.phone && (
+                <a
+                  href={`tel:${coordinator.phone}`}
+                  className="flex items-center gap-3 rounded-lg border border-white/10 px-3 py-3 text-sm text-[#D6C8C8] transition-colors hover:border-[#B52A32] hover:text-white"
+                >
+                  <Phone size={16} className="shrink-0 text-[#E07179]" />
+                  {coordinator.phone}
+                </a>
+              )}
+            </div>
+          </div>
+        </dialog>
       )}
     </article>
   );
@@ -347,194 +326,111 @@ function CoordinatorCard({
 ================================================================ */
 
 function DevelopingTeam() {
-  if (DEVELOPING_TEAM.length === 0) {
-    return null;
-  }
+  if (DEVELOPING_TEAM.length === 0) return null;
 
   return (
     <div>
-      {/* Section heading */}
       <div className="mb-6 flex items-center gap-4">
         <span className="mono whitespace-nowrap text-[10px] uppercase tracking-[0.3em] text-[#A8A8A8]">
           DEVELOPING & DESIGN TEAM
         </span>
-
         <div className="h-px flex-1 bg-white/10" />
       </div>
-
-      {/* Team cards */}
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-2 sm:gap-3 md:grid-cols-4 md:gap-4 lg:gap-6">
+      <div className="grid grid-cols-5 gap-1 sm:gap-2 md:gap-4 lg:gap-6">
         {DEVELOPING_TEAM.map((member) => (
-          <DevelopingTeamCard
-            key={member.id}
-            member={member}
-          />
+          <DevelopingTeamCard key={member.id} member={member} />
         ))}
       </div>
     </div>
   );
 }
 
-/* ================================================================
-   DEVELOPING TEAM CARD
-================================================================ */
-
 function DevelopingTeamCard({
   member,
 }: {
   member: (typeof DEVELOPING_TEAM)[number];
 }) {
-  const hasConnections = Boolean(
-    member.linkedin ||
-      member.github ||
-      member.phone
-  );
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const hasConnections = Boolean(member.linkedin || member.github || member.phone);
 
   return (
     <article className="group relative overflow-hidden rounded-lg glass glass-hover transition-all duration-300">
-      {/* ====================================================== */}
-      {/* PHOTO                                                  */}
-      {/* ====================================================== */}
-
-      <div className="relative aspect-[4/5] overflow-hidden">
-        {member.image ? (
+      <button
+        type="button"
+        onClick={() => hasConnections && dialogRef.current?.showModal()}
+        disabled={!hasConnections}
+        className="block w-full text-left disabled:cursor-default"
+        aria-label={hasConnections ? `View contact details for ${member.name}` : member.name}
+      >
+        <div className="relative aspect-[4/5] overflow-hidden">
           <img
             src={member.image}
             alt={member.name}
             loading="lazy"
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#151515]">
-            <span className="display text-3xl font-bold text-[#252525]">
-              {member.name
-                .split(" ")
-                .map((name) => name[0])
-                .slice(0, 2)
-                .join("")}
-            </span>
-          </div>
-        )}
-
-        {/* Photo gradient */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#030303] via-transparent to-transparent" />
-      </div>
-
-      {/* ====================================================== */}
-      {/* INFORMATION                                            */}
-      {/* ====================================================== */}
-
-      <div className="p-2 sm:p-3 md:p-4">
-        <h3 className="display break-words text-xs font-semibold leading-tight tracking-tight text-white sm:text-sm md:text-base">
-          {member.name}
-        </h3>
-
-        <div className="mt-1 text-[9px] uppercase tracking-wide text-[#B52A32] sm:text-xs">
-          {member.role}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#030303] via-transparent to-transparent" />
         </div>
-
-        {/* ================================================== */}
-        {/* CONNECTS                                             */}
-        {/* ================================================== */}
-
-        {hasConnections && (
-          <div className="mt-4 border-t border-white/10 pt-3">
-            <div className="mono mb-2 text-[8px] uppercase tracking-[0.2em] text-[#A8A8A8]">
-              Connects
+        <div className="p-1.5 sm:p-2 md:p-3">
+          <h3 className="display break-words text-[8px] font-semibold leading-tight tracking-tight text-white sm:text-xs md:text-sm">
+            {member.name}
+          </h3>
+          <div className="mt-1 break-words text-[7px] uppercase tracking-wide text-[#B52A32] sm:text-[9px] md:text-[10px]">
+            {member.role}
+          </div>
+          {hasConnections && (
+            <div className="mono mt-2 text-[6px] uppercase tracking-widest text-[#B52A32] sm:text-[8px]">
+              View links
             </div>
+          )}
+        </div>
+      </button>
 
-            <div className="flex items-center gap-2">
-              {/* ================================================== */}
-              {/* LINKEDIN                                            */}
-              {/* ================================================== */}
-
+      {hasConnections && (
+        <dialog
+          ref={dialogRef}
+          aria-labelledby={`developer-dialog-title-${member.id}`}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) dialogRef.current?.close();
+          }}
+          className="fixed left-1/2 top-1/2 m-0 w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-white/15 bg-[#0b0708] p-0 text-white shadow-2xl backdrop:bg-black/80"
+        >
+          <div className="relative p-6 sm:p-8">
+            <button
+              type="button"
+              onClick={() => dialogRef.current?.close()}
+              aria-label="Close contact details"
+              className="absolute right-4 top-4 rounded-full p-2 text-[#A8A8A8] transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-[#F07C84]"
+            >
+              <X size={18} />
+            </button>
+            <div className="mono mb-3 text-[10px] uppercase tracking-[0.3em] text-[#E07179]">
+              Team contact
+            </div>
+            <h3 id={`developer-dialog-title-${member.id}`} className="display pr-8 text-2xl font-bold">
+              {member.name}
+            </h3>
+            <p className="mt-2 text-sm text-[#E07179]">{member.role}</p>
+            <div className="mt-7 space-y-3 border-t border-white/10 pt-5">
               {member.linkedin && (
-                <a
-                  href={member.linkedin}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`${member.name} LinkedIn`}
-                  className="
-                    flex h-8 w-8 items-center justify-center
-                    rounded-full
-                    border border-[#0A66C2]/40
-                    bg-[#0A66C2]/10
-                    text-[#0A66C2]
-                    transition-all duration-300
-                    hover:border-[#0A66C2]
-                    hover:bg-[#0A66C2]/20
-                    hover:text-[#4DA3FF]
-                    hover:shadow-[0_0_12px_rgba(10,102,194,0.45)]
-                  "
-                >
-                  <Linkedin
-                    size={14}
-                    strokeWidth={2}
-                  />
+                <a href={member.linkedin} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-lg border border-white/10 px-3 py-3 text-sm text-[#D6C8C8] hover:border-[#0A66C2] hover:text-white">
+                  <Linkedin size={16} className="text-[#4DA3FF]" /> LinkedIn
                 </a>
               )}
-
-              {/* ================================================== */}
-              {/* GITHUB                                              */}
-              {/* ================================================== */}
-
               {member.github && (
-                <a
-                  href={member.github}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`${member.name} GitHub`}
-                  className="
-                    flex h-8 w-8 items-center justify-center
-                    rounded-full
-                    border border-white/20
-                    bg-white/5
-                    text-[#D4D4D4]
-                    transition-all duration-300
-                    hover:border-white/50
-                    hover:bg-white/10
-                    hover:text-white
-                    hover:shadow-[0_0_12px_rgba(255,255,255,0.25)]
-                  "
-                >
-                  <Github
-                    size={14}
-                    strokeWidth={2}
-                  />
+                <a href={member.github} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-lg border border-white/10 px-3 py-3 text-sm text-[#D6C8C8] hover:border-white/50 hover:text-white">
+                  <Github size={16} /> GitHub
                 </a>
               )}
-
-              {/* ================================================== */}
-              {/* PHONE                                               */}
-              {/* ================================================== */}
-
               {member.phone && (
-                <a
-                  href={`tel:${member.phone}`}
-                  aria-label={`Call ${member.name}`}
-                  className="
-                    flex h-8 w-8 items-center justify-center
-                    rounded-full
-                    border border-[#22C55E]/40
-                    bg-[#22C55E]/10
-                    text-[#22C55E]
-                    transition-all duration-300
-                    hover:border-[#22C55E]
-                    hover:bg-[#22C55E]/20
-                    hover:text-[#4ADE80]
-                    hover:shadow-[0_0_12px_rgba(34,197,94,0.45)]
-                  "
-                >
-                  <Phone
-                    size={14}
-                    strokeWidth={2}
-                  />
+                <a href={`tel:${member.phone}`} className="flex items-center gap-3 rounded-lg border border-white/10 px-3 py-3 text-sm text-[#D6C8C8] hover:border-[#22C55E] hover:text-white">
+                  <Phone size={16} className="text-[#22C55E]" /> {member.phone}
                 </a>
               )}
             </div>
           </div>
-        )}
-      </div>
+        </dialog>
+      )}
     </article>
   );
 }
