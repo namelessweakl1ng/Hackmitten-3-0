@@ -1,7 +1,6 @@
 "use client";
 
-import { Session } from "next-auth";
-import { SessionProvider, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -23,10 +22,10 @@ const NAV: { label: string; href: string; roles: string[]; icon: any; superAdmin
   { label: "Admin Users", href: "/admin/users", roles: ["SUPER_ADMIN"], icon: UserCog, superAdminOnly: true },
 ];
 
-function AdminShellInner({ children, session }: { children: React.ReactNode; session: Session | null }) {
+function AdminShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { status } = useSession();
+  const { status, data: session } = useSession();
 
   useEffect(() => {
     if (status === "loading") return;
@@ -122,10 +121,6 @@ function AdminShellInner({ children, session }: { children: React.ReactNode; ses
   );
 }
 
-export function AdminShell({ children, session }: { children: React.ReactNode; session: Session | null }) {
-  return (
-    <SessionProvider session={session}>
-      <AdminShellInner session={session}>{children}</AdminShellInner>
-    </SessionProvider>
-  );
+export function AdminShell({ children }: { children: React.ReactNode }) {
+  return <AdminShellInner>{children}</AdminShellInner>;
 }

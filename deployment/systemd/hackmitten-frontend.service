@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/srv/hackmitten/frontend
 EnvironmentFile=/etc/hackmitten/frontend.env
-ExecStart=/usr/local/bin/bun run start
+ExecStart=/usr/bin/node server.js
 Restart=on-failure
 RestartSec=5
 

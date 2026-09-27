@@ -1,70 +1,66 @@
 # Hackmitten 3.0 API contract
 
-## Base rules
+## Transport and responses
 
-- All server endpoints are under /api
-- Success responses use { ok: true, data: ... }
-- Error responses use { ok: false, error: "..." }
-- Authorization is always validated on the backend
-- Database and filesystem writes happen only in the backend app
+- API routes are owned by `backend/src/app/api` and use the `/api` prefix.
+- Browser calls use same-origin `/api/*` URLs. The frontend proxies these to `BACKEND_API_ORIGIN`; the production Nginx config may route `/api/*` directly to port 3001.
+- Responses are route-specific JSON or file downloads; there is no global `{ ok, data }` envelope. Errors generally use an `error` field and an HTTP status.
+- Session and permission checks, database operations, filesystem storage, email, and exports are backend responsibilities.
 
 ## Health
 
-- GET /api/health
-- Response: { ok: true, data: { status: "ok", ok: true, timestamp: "..." } }
+- `GET /api/health`
+- `200`: `{ "status": "ok", "database": "available" }`
+- `503`: `{ "status": "unavailable", "database": "unavailable" }`
 
 ## Auth
 
-- POST /api/auth/login
-- GET /api/auth/session
-- POST /api/auth/logout
+- NextAuth credentials endpoints are served at `/api/auth/*` (`GET` and `POST`). The frontend uses the NextAuth client for sign-in, session, and sign-out.
+- Roles are resolved and enforced by backend auth/permission helpers; clients must not treat UI role-gating as authorization.
 
 ## Registration
 
-- POST /api/registrations
-- GET /api/registrations/:id
-- POST /api/registrations/:id/payment
-- POST /api/registrations/:id/payment-screenshot
-- GET /api/registrations/:id/payment-screenshot
+- `GET /api/registrations?name=...`: check normalized team-name availability.
+- `POST /api/registrations`: submit a registration; accepts JSON or multipart form data with participant images.
+- `GET /api/registrations/:id`: retrieve a registration using its access cookie.
+- `POST /api/registrations/:id/payment`: submit payment transaction details using the registration access cookie.
+- `POST /api/registrations/:id/payment-screenshot`: upload the payment screenshot using the registration access cookie.
 
 ## Admin
 
-- GET /api/admin/stats
-- GET /api/admin/registrations
-- GET /api/admin/teams
-- GET /api/admin/users
-- GET /api/admin/config
-- GET /api/admin/export
-- GET /api/admin/audit
+- `GET /api/admin/stats`, `/registrations`, `/teams`, `/users`, `/config`, `/audit`, `/change-history`, `/export`
+- `POST /api/admin/teams`, `/users`, `/meals`, `/credentials`, `/audit/bulk-delete`
+- `PATCH /api/admin/config`, `/teams/:id`, `/teams/:id/approve`, `/meals/:id`
+- `DELETE /api/admin/teams/:id`, `/users/:id`, `/meals/:id`, `/audit/:id`
+- Payment actions: `POST /api/admin/payments/:id/verify` and `/reject`; authorized screenshot and participant-image reads are `GET /api/admin/payments/:id/screenshot` and `/api/admin/participants/:id/image`.
+- Change-history rollback: `POST /api/admin/change-history/:id/rollback`.
 
 ## Coordinator
 
-- GET /api/coordinator/teams
-- GET /api/coordinator/teams/export
+- `GET /api/coordinator/teams`
+- `GET /api/coordinator/teams/export`
 
 ## Food
 
-- POST /api/food/check-in
-- GET /api/food/check-ins
-- GET /api/food/stats
-- GET /api/food/team-status
+- `GET /api/meals`, `/api/food/check-ins`, `/api/food/stats`, `/api/food/team-status`
+- `POST /api/food/check-in`
 
 ## Pass and QR
 
-- GET /api/pass/:qrToken
-- GET /api/uploads/:fileName
+- `GET /api/pass/:qrToken`
+- `GET /api/uploads/:fileName` for public uploads.
 
 ## Uploads
 
-- Private uploads are stored in backend-managed directories with authorization checks before retrieval.
-- Public uploads remain served through application-controlled endpoints, never by direct path exposure.
+- Private participant images and payment screenshots are stored in backend-managed directories and returned only by permission-checked routes.
+- Public uploads are read through `/api/uploads/:fileName`; storage paths are never exposed directly.
 
 ## Error semantics
 
-- 400: malformed request or validation failure
-- 401: unauthenticated
-- 403: forbidden role or permission
-- 404: resource not found
-- 409: duplicate or conflict
-- 413: payload too large
-- 500: internal server error
+- `400`: malformed request or validation failure
+- `401`: unauthenticated
+- `403`: forbidden role, permission, or closed registration
+- `404`: resource not found
+- `409`: duplicate or conflict
+- `413`: payload too large
+- `500`: internal server error

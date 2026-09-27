@@ -1,16 +1,18 @@
 # Datacenter setup and operations
 
-This manual targets a single Linux host running Nginx, one Next.js standalone Node.js service, PostgreSQL, and persistent local storage. No external database or object storage is required. Fedora is the development target; Ubuntu/Debian package names are noted below.
+This manual targets a Linux host running Nginx, separate Next.js standalone frontend and backend Node.js services, PostgreSQL, and persistent local storage. No external database or object storage is required. Fedora is the development target; Ubuntu/Debian package names are noted below.
 
 ## 1. Architecture and prerequisites
 
 ```text
-Users --HTTPS--> Nginx --127.0.0.1:3000--> Next.js (pages, APIs, auth)
-                                             |             |
-                                             v             v
-                                         PostgreSQL   /var/lib/hackmitten
-                                                       public/ private/
-                              systemd supervises the Node.js process
+Users --HTTPS--> Nginx --pages/assets--> Frontend :3000
+                 |
+                 +--/api/*-----------> Backend :3001
+                                          |       |
+                                          v       v
+                                      PostgreSQL  /var/lib/hackmitten
+                                                  public/ private/
+                         systemd supervises both Node.js services
 ```
 
 Use a 64-bit Linux host, Node.js 20.9 or later, Bun matching the lockfile toolchain for build/database commands, PostgreSQL 14 or later, Nginx, and a DNS name with a valid TLS certificate. Reserve persistent disk space for PostgreSQL, uploaded files, and backups. Build the standalone artifact on Linux for the same CPU architecture as the datacenter host.
@@ -31,10 +33,12 @@ Install a supported Node.js release and Bun from the organization's approved pac
 git clone <approved-repository-url> hackmitten
 cd hackmitten
 bun install --frozen-lockfile
-cp .env.example .env
-# Edit .env with a disposable local PostgreSQL URL and local-only secrets.
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+# Set local PostgreSQL credentials and local-only auth/SMTP values in backend/.env.
+# Set BACKEND_API_ORIGIN=http://127.0.0.1:3001 in frontend/.env.
 bun run db:validate
-bun run db:migrate
+bun run db:migrate:deploy
 bun run db:bootstrap
 bun run dev
 ```
@@ -69,18 +73,20 @@ The optional `HM3_PUBLIC_UPLOAD_DIR` and `HM3_PRIVATE_UPLOAD_DIR` variables over
 
 ## 5. Environment and secrets
 
-Create `/etc/hackmitten/hackmitten.env` with root ownership and mode 0640. Do not put it in a release archive or Git:
+Create protected backend and frontend environment files with root ownership and mode 0640. Do not put them in a release archive or Git. The backend receives secrets and persistent storage settings:
 
 ```dotenv
 NODE_ENV=production
 HOSTNAME=127.0.0.1
-PORT=3000
+PORT=3001
 HACKMITTEN_STORAGE_ROOT=/var/lib/hackmitten
 DATABASE_URL=postgresql://hackmitten:<secret>@127.0.0.1:5432/hackmitten
 DIRECT_URL=postgresql://hackmitten:<secret>@127.0.0.1:5432/hackmitten
 NEXTAUTH_URL=https://hackmitten.example.org
 NEXTAUTH_SECRET=<generated-cryptographic-secret>
 ```
+
+Set the backend port to `3001` in its environment file. The frontend environment contains only `PORT=3000`, `NEXT_PUBLIC_APP_URL`, and `BACKEND_API_ORIGIN=http://127.0.0.1:3001`. The frontend API origin is read while building the frontend artifact; it is not a database or SMTP setting.
 
 For first bootstrap, set real emails and unique passwords for the preset admin, coordinator, and food-admin usernames in `.env.example`, plus `HM3_BERSERK_SECRET`. The bootstrap creates all three users with bcrypt hashes; do not put plaintext passwords in Git or logs. Re-run only for an explicitly planned credential reconciliation. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` in this protected runtime file. For Gmail-compatible SMTP, use a Google account with 2-Step Verification enabled, create a Gmail App Password, then configure those SMTP values here. Never put the app password in Git. Port 587 uses STARTTLS; port 465 uses implicit TLS. Protect this file and rotate credentials through the operator's secret-management process.
 
@@ -98,19 +104,18 @@ bun test
 bun run build
 ```
 
-`db:generate` and `build` are build-time operations. `build` compiles the app and prepares the standalone artifact; it does not connect to production PostgreSQL, migrate, or bootstrap accounts. `db:migrate:deploy` and `db:bootstrap` are separate, explicit runtime operations.
+`db:generate` and `build` are build-time operations. `build` compiles both packages and prepares standalone artifacts at `frontend/.next/standalone/frontend` and `backend/.next/standalone/backend`; it does not connect to production PostgreSQL, migrate, or bootstrap accounts. `db:migrate:deploy` and `db:bootstrap` are separate, explicit operations.
 
-Build does not migrate or bootstrap a database. The runtime directory is `.next/standalone/`; it includes `server.js`, traced runtime modules, `.next/static`, and static public files. The preparation script excludes the old `public/uploads` directory. Never place `.env` or private storage in the build context/archive.
+Each standalone directory contains `server.js`, traced runtime modules, `.next/static`, and public files. The preparation scripts exclude `public/uploads`. Never place `.env` or private storage in the build context/archive. Release packaging copies these two runtime directories into `deployment/package/frontend` and `deployment/package/backend` after all validation gates pass.
 
 For an offline or restricted-network datacenter, stage the standalone server plus an operations directory containing `package.json`, `bun.lock`, `prisma/schema.prisma`, `prisma/migrations`, `prisma/migration_lock.toml`, `node_modules/prisma`, and `node_modules/@prisma` from the locked Linux build. Example on the Linux build host:
 
 ```sh
 release=3.0.0
-mkdir -p "dist/hackmitten-$release/runtime" "dist/hackmitten-$release/operations/node_modules"
-cp -a .next/standalone/. "dist/hackmitten-$release/runtime/"
-cp package.json bun.lock "dist/hackmitten-$release/operations/"
-cp -a prisma "dist/hackmitten-$release/operations/"
-cp -a node_modules/prisma node_modules/@prisma "dist/hackmitten-$release/operations/node_modules/"
+mkdir -p "dist/hackmitten-$release/frontend" "dist/hackmitten-$release/backend" "dist/hackmitten-$release/operations"
+cp -a frontend/.next/standalone/frontend/. "dist/hackmitten-$release/frontend/"
+cp -a backend/.next/standalone/backend/. "dist/hackmitten-$release/backend/"
+cp -a backend/prisma "dist/hackmitten-$release/operations/"
 tar -czf "hackmitten-$release-linux-x64.tar.gz" -C dist "hackmitten-$release"
 sha256sum "hackmitten-$release-linux-x64.tar.gz" > "hackmitten-$release-linux-x64.tar.gz.sha256"
 ```
@@ -142,22 +147,22 @@ The importer reads exported local files, validates image signatures, copies them
 
 ## 8. systemd
 
-Install `deploy/hackmitten.service` as `/etc/systemd/system/hackmitten.service`; review the Node binary path and release path. Install the extracted release at `/opt/hackmitten/current` (a symlink to the selected version), then:
+Install `deployment/systemd/hackmitten-frontend.service` and `deployment/systemd/hackmitten-backend.service` as systemd units; review the Node binary and paths. Install the extracted frontend and backend at `/srv/hackmitten/frontend` and `/srv/hackmitten/backend`, then:
 
 ```sh
 sudo chown root:root /etc/hackmitten/hackmitten.env
 sudo chmod 0640 /etc/hackmitten/hackmitten.env
 sudo systemctl daemon-reload
-sudo systemctl enable --now hackmitten
-sudo systemctl status hackmitten
-sudo journalctl -u hackmitten -n 100 --no-pager
+sudo systemctl enable --now hackmitten-frontend hackmitten-backend
+sudo systemctl status hackmitten-frontend hackmitten-backend
+sudo journalctl -u hackmitten-frontend -u hackmitten-backend -n 100 --no-pager
 ```
 
-The service runs as an unprivileged `hackmitten` account, binds only to loopback, and may write only under `/var/lib/hackmitten` under the supplied systemd sandbox. For the first install, point `current` at the runtime directory inside the unpacked release (create the link only if it does not already exist): `sudo ln -s /opt/hackmitten/releases/<version>/runtime /opt/hackmitten/current`.
+Both services should run as an unprivileged `hackmitten` account and bind only to loopback. The backend may write only under `/var/lib/hackmitten`; the frontend has no storage write access.
 
 ## 9. Nginx, HTTPS, and firewall
 
-Install `deploy/nginx-limits.conf` under `/etc/nginx/conf.d/` and `deploy/nginx-hackmitten.conf` as a site/server config. Replace the sample host and certificate paths. Obtain certificates through the datacenter's approved ACME or certificate authority workflow. Validate and reload:
+Install `deployment/nginx/hackmitten.conf` as a site/server config. Replace the sample host and certificate paths. Obtain certificates through the datacenter's approved ACME or certificate authority workflow. Validate and reload:
 
 ```sh
 sudo nginx -t
@@ -165,7 +170,7 @@ sudo systemctl enable --now nginx
 sudo systemctl reload nginx
 ```
 
-Allow inbound 443 (and 80 only for redirect/certificate renewal) from approved networks. Keep 3000 bound to loopback and 5432 restricted to local/private DB clients. Nginx sets request limits for credential login and registration; adjust rates with the security/network owners. The server-level request cap supports the 8 MiB payment screenshot endpoint, while registration is capped at 5 MiB. Keep private storage outside Nginx document roots.
+Allow inbound 443 (and 80 only for redirect/certificate renewal) from approved networks. Keep ports 3000 and 3001 bound to loopback and 5432 restricted to local/private DB clients. Nginx routes `/api/*` to the backend and all other requests to the frontend. Nginx sets request limits for credential login and registration; adjust rates with the security/network owners. The server-level request cap supports the 8 MiB payment screenshot endpoint, while registration is capped at 5 MiB. Keep private storage outside Nginx document roots.
 
 On Fedora, enable only approved services in firewalld (for example `sudo firewall-cmd --permanent --add-service=https`, optionally `--add-service=http`, then `sudo firewall-cmd --reload`). On Ubuntu/Debian with UFW, allow `443/tcp` and optional `80/tcp`. Do not open `3000/tcp` or `5432/tcp` to user networks.
 

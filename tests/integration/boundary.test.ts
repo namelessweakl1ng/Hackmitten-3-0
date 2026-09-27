@@ -30,6 +30,13 @@ describe("architecture boundaries", () => {
     expect(hasPrisma).toBe(false);
   });
 
+  it("frontend delegates API requests to the backend", () => {
+    const frontendConfig = read("frontend/next.config.ts");
+    expect(frontendConfig).toContain('source: "/api/:path*"');
+    expect(frontendConfig).toContain("${backendApiOrigin}/api/:path*");
+    expect(fs.existsSync(path.join(root, "frontend/src/app/api"))).toBe(false);
+  });
+
   it("backend owns the config and storage responsibilities", () => {
     const backendText = read("backend/src/config/env.ts");
     expect(backendText).toContain("HM3_PRIVATE_UPLOAD_DIR");
@@ -37,7 +44,9 @@ describe("architecture boundaries", () => {
   });
 
   it("health endpoint contract exists at the backend boundary", () => {
-    const route = read("backend/src/routes/health.ts");
-    expect(route).toContain("/api/health");
+    const route = read("backend/src/app/api/health/route.ts");
+    expect(route).toContain("db.$queryRaw`SELECT 1`");
+    expect(route).toContain('status: "unavailable"');
+    expect(route).toContain("status: 503");
   });
 });

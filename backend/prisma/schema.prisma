@@ -82,6 +82,8 @@ model Team {
   id             String             @id @default(cuid())
   teamName       String             @unique
   registrationId String?            @unique
+  registrationAccessTokenHash String? @unique
+  registrationAccessExpiresAt DateTime?
   status         RegistrationStatus @default(DRAFT)
   college        String?
   registrationAcknowledgementAttemptedAt DateTime?
