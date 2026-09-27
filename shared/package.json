@@ -1,0 +1,12 @@
+{
+  "name": "hackmitten-shared",
+  "private": true,
+  "version": "3.0.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

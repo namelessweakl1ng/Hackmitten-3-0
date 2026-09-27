@@ -19,7 +19,6 @@ coverage
 
 # production
 /build
-/deployment/packages/
 
 # misc
 .DS_Store
