@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requirePermission, jsonError } from "@/lib/api-auth";
-import { writeAudit } from "@/lib/audit";
-import { recordChange, snapshotRow } from "@/lib/change-history";
 import { normalizeRegistrationMembers, registrationSchema } from "@/lib/validators";
+import { ADMIN_TEAM_SELECT } from "@/lib/admin-team-view";
 import {
   generateQrToken,
   generateRegistrationId,
@@ -19,10 +18,7 @@ export async function GET() {
   try {
     await requirePermission("registration:view");
     const teams = await db.team.findMany({
-      include: {
-        members: { select: { id: true, fullName: true, isLeader: true, participantId: true, degree: true } },
-        payment: { select: { id: true, status: true, transactionId: true } },
-      },
+      select: ADMIN_TEAM_SELECT,
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json({ teams });
@@ -129,28 +125,12 @@ export async function POST(req: Request) {
         });
       }
 
-      return tx.team.findUnique({
+      return tx.team.findUniqueOrThrow({
         where: { id: team.id },
-        include: { members: true, payment: true },
+        select: ADMIN_TEAM_SELECT,
       });
     });
 
-    // Record change history + audit
-    await recordChange({
-      section: "TEAM",
-      entityId: result!.id,
-      entityType: "Team",
-      action: wantApproved ? "MANUAL_CREATE_APPROVED" : "MANUAL_CREATE",
-      previousState: null,
-      newState: snapshotRow(result),
-      changedById: ctx.userId,
-    });
-    await writeAudit({
-      userId: ctx.userId,
-      teamId: result!.id,
-      action: "TEAM_MANUALLY_CREATED",
-      detail: `${wantApproved ? "Approved" : "Submitted"} · ${teamName} · ${members.length} members`,
-    });
 
     return NextResponse.json({ team: result }, { status: 201 });
   } catch (err) {

@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 
 // Force new client on schema version changes
-const SCHEMA_VERSION = "v3-2026-09-06-changehistory";
+const SCHEMA_VERSION = "v3-2026-09-27-remove-history";
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient; __prismaVersion?: string };
 
 // If schema version changed, discard the cached client

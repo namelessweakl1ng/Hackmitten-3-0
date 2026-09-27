@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import type { NextConfig } from "next";
 
 const backendApiOrigin = (process.env.BACKEND_API_ORIGIN ?? "http://127.0.0.1:3001").trim().replace(/\/$/, "");
@@ -8,6 +9,7 @@ if (!["http:", "https:"].includes(parsedBackendOrigin.protocol) || parsedBackend
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  outputFileTracingRoot: resolve(process.cwd(), ".."),
   async rewrites() {
     return [
       {

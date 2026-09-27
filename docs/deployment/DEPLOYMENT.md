@@ -30,3 +30,5 @@ After all validation gates pass, package the contents of those two standalone di
 ## Production notes
 
 The backend alone receives database, NextAuth, SMTP, and storage settings. The frontend receives only public app configuration and `BACKEND_API_ORIGIN`. Configure real values in protected environment files or a secret manager; never include them in Git or deployment artifacts. Build and packaging do not run migrations; run reviewed migrations only as a separate, explicitly approved operation.
+
+The Nginx site file must be included inside the `http {}` context so its request-limit zones load. It limits `/api/auth/callback/credentials` to 10 requests/minute per client IP with a burst of 5, and `/api/admin/credentials` to 3 requests/minute per client IP with a burst of 2; excess requests receive HTTP 429. The other API paths retain the normal proxy behavior. If a trusted load balancer sits in front of Nginx, configure its real client IP handling before enabling the limits.

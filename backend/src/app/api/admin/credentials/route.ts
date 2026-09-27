@@ -3,7 +3,6 @@ import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { jsonError } from "@/lib/api-auth";
 import { passwordChangeSchema } from "@/lib/validators";
-import { writeAudit } from "@/lib/audit";
 
 /**
  * POST /api/admin/credentials
@@ -68,11 +67,6 @@ export async function POST(req: Request) {
       data: { username: newUsername, passwordHash: newHash },
     });
 
-    await writeAudit({
-      userId: superAdmin.id,
-      action: "PASSWORD_CHANGED",
-      detail: `Username updated to ${newUsername}`,
-    });
 
     return NextResponse.json({ success: true });
   } catch (err) {

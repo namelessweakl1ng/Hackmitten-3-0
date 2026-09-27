@@ -4,7 +4,7 @@
 
 - `/` renders fixed public content from TypeScript data and committed assets. No website-content API or CMS is used.
 - `/register` creates a team, accepts payment details, and supports optional private participant photos.
-- `/admin` provides team/payment review, registration controls, operational audit, and account management.
+- `/admin` provides team/payment review, registration controls, meal management, and account management.
 - `/coordinator` provides operational team views and CSV export.
 - `/food-admin` and `/admin/meals` support meals and QR check-in.
 - API handlers implement authentication, permission checks, database access, filesystem access, email, exports, and operational rules. Browser components do not import Prisma or filesystem modules.
@@ -17,7 +17,7 @@ Bootstrap provisions `hackmittenadmin2026`, `hackmitten2026`, and `hackmittenfoo
 
 ## Database and event configuration
 
-PostgreSQL is the supported database. `prisma/schema.prisma` and forward-only migrations define its schema. Operational records include users, registration controls, teams, participants, payments, meals/check-ins, audit logs, and change history.
+PostgreSQL is the supported database. `prisma/schema.prisma` and forward-only migrations define its schema. Operational records include users, registration controls, teams, participants, payments, meals and check-ins.
 
 `EventConfig` contains only `registrationEnabled` and nullable `registrationLimit`. Static event dates/content, UPI ID, gallery, crew, partner/departments, and venue are source controlled. Team creation takes a PostgreSQL advisory transaction lock before checking capacity and inserting, so simultaneous submissions cannot exceed the configured limit. Food check-ins have a unique participant/meal constraint.
 

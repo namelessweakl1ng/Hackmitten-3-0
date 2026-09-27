@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, X, Loader2, Save, ShieldCheck } from "lucide-react";
+import { fetchJson } from "@/lib/api-fetch";
 
 type AdminUser = {
   id: string;
@@ -13,16 +14,24 @@ type AdminUser = {
   createdAt: string;
 };
 
+type UserDraft = {
+  username: string;
+  email: string;
+  name: string;
+  role: "COORDINATOR" | "FOOD_ADMIN" | "PARTICIPANT";
+  password: string;
+};
+
 export function AdminUsersManager() {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery<{ users: AdminUser[] }>({
+  const { data, isLoading, error: queryError } = useQuery<{ users: AdminUser[] }>({
     queryKey: ["admin-users"],
-    queryFn: async () => (await fetch("/api/admin/users")).json(),
+    queryFn: () => fetchJson("/api/admin/users"),
   });
   const users: AdminUser[] = data?.users ?? [];
 
   const [creating, setCreating] = useState(false);
-  const [draft, setDraft] = useState<any>({ username: "", email: "", name: "", role: "COORDINATOR", password: "" });
+  const [draft, setDraft] = useState<UserDraft>({ username: "", email: "", name: "", role: "COORDINATOR", password: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,7 +73,7 @@ export function AdminUsersManager() {
         </button>
       </header>
 
-      {error && <div className="glass rounded p-3 text-sm text-[#D83A43] border-l-2 border-[#B52A32]">{error}</div>}
+      {(error || queryError) && <div role="alert" className="glass rounded p-3 text-sm text-[#D83A43] border-l-2 border-[#B52A32]">{error || queryError?.message}</div>}
 
       {creating && (
         <div className="glass rounded-lg p-5 border-l-2 border-[#B52A32]">
@@ -77,7 +86,7 @@ export function AdminUsersManager() {
             <Labeled label="Email"><input type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} className={inputCls} /></Labeled>
             <Labeled label="Name (optional)"><input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className={inputCls} /></Labeled>
             <Labeled label="Role">
-              <select value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value })} className={inputCls}>
+              <select value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value as UserDraft["role"] })} className={inputCls}>
                 <option value="COORDINATOR">Coordinator</option>
                 <option value="FOOD_ADMIN">Food Admin</option>
                 <option value="PARTICIPANT">Participant</option>

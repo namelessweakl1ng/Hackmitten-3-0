@@ -6,6 +6,7 @@ import { Html5Qrcode } from "html5-qrcode";
 import { ScanLine, CheckCircle2, XCircle, AlertCircle, LogOut, History, X, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
+import { fetchJson } from "@/lib/api-fetch";
 
 type ScanResult = {
   status: "CHECKED_IN" | "ALREADY_CHECKED_IN" | "ERROR";
@@ -29,11 +30,11 @@ export function FoodScannerApp() {
   const qc = useQueryClient();
 
   // Load meals
-  const { data: mealsData } = useQuery({
+  const { data: mealsData, error: mealsError } = useQuery<{ meals: { id: string; type: string; label: string; enabled: boolean }[] }>({
     queryKey: ["meals"],
-    queryFn: async () => (await fetch("/api/meals")).json(),
+    queryFn: () => fetchJson("/api/meals"),
   });
-  const meals: any[] = mealsData?.meals ?? [];
+  const meals = mealsData?.meals ?? [];
 
   // Default to LUNCH (one-time, deferred)
   useEffect(() => {
@@ -126,6 +127,7 @@ export function FoodScannerApp() {
       />
 
       <div className="relative z-10 max-w-md mx-auto px-4 py-5 min-h-screen flex flex-col">
+        {mealsError && <div role="alert" className="mb-3 text-sm text-[#D83A43]">{mealsError.message}</div>}
         {/* Header */}
         <header className="flex items-center justify-between mb-4">
           <Link href="/" className="flex items-baseline gap-2">
@@ -344,16 +346,22 @@ export function FoodScannerApp() {
 }
 
 function HistoryDrawer({ onClose, mealId }: { onClose: () => void; mealId: string }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error: queryError } = useQuery<{
+    checkIns: {
+      id: string;
+      createdAt: string;
+      participant: { fullName: string; team: { teamName: string } };
+      meal: { label: string };
+    }[];
+  }>({
     queryKey: ["food-check-ins-recent", mealId],
     queryFn: async () => {
       const params = new URLSearchParams({ pageSize: "30" });
       if (mealId) params.set("mealId", mealId);
-      const r = await fetch(`/api/food/check-ins?${params.toString()}`);
-      return r.json();
+      return fetchJson(`/api/food/check-ins?${params.toString()}`);
     },
   });
-  const checkIns: any[] = data?.checkIns ?? [];
+  const checkIns = data?.checkIns ?? [];
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center">
@@ -367,6 +375,8 @@ function HistoryDrawer({ onClose, mealId }: { onClose: () => void; mealId: strin
         <div className="overflow-y-auto p-4 space-y-2">
           {isLoading ? (
             <div className="text-[#A8A8A8] text-sm">Loading…</div>
+          ) : queryError ? (
+            <div role="alert" className="text-[#D83A43] text-sm">{queryError.message}</div>
           ) : checkIns.length === 0 ? (
             <div className="text-[#A8A8A8] text-sm">No check-ins yet.</div>
           ) : (

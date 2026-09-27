@@ -16,8 +16,7 @@ export type Permission =
   | "coordinator:manage"
   | "user:manage"
   | "credential:change"
-  | "export:data"
-  | "audit:view";
+  | "export:data";
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   SUPER_ADMIN: [
@@ -37,14 +36,12 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "user:manage",
     "credential:change",
     "export:data",
-    "audit:view",
   ],
   COORDINATOR: [
     "dashboard:view",
     "registration:view",
     "participant:view",
     "food:view",
-    "audit:view",
   ],
   FOOD_ADMIN: [
     "food:scan",

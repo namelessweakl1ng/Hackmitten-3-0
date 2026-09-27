@@ -2,25 +2,10 @@
 
 import { resolveSponsors } from "@/data/sponsors";
 
-type Sponsor = {
-  id: string;
-  name: string;
-  logoUrl: string;
-  websiteUrl: string | null;
-  tier:
-    | "TITLE"
-    | "PLATINUM"
-    | "GOLD"
-    | "SILVER"
-    | "PARTNER"
-    | "SUPPORTER"
-    | "CUSTOM";
-  customTier: string | null;
-  sortOrder: number;
-};
+type Sponsor = ReturnType<typeof resolveSponsors>[number];
 
 export function Sponsors() {
-  const sponsors = resolveSponsors() as Sponsor[];
+  const sponsors = resolveSponsors();
 
   if (sponsors.length === 0) {
     return null;
@@ -99,22 +84,18 @@ export function Sponsors() {
               <div className="h-px flex-1 bg-white/10" />
             </div>
 
-            {/* 
-              FOUR EQUAL COLUMNS
-              All sponsor logos get the same amount of space.
-            */}
-            <div className="grid w-full grid-cols-4 items-center gap-3 md:gap-6">
+            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] items-center gap-4 md:gap-6">
 
               {sponsorLogos.map((sponsor) => (
                 <div
                   key={sponsor.id}
                   className="
                     flex
-                    h-24
+                    h-28
                     min-w-0
                     items-center
                     justify-center
-                    md:h-32
+                    md:h-36
                   "
                 >
                   {sponsor.logoUrl ? (

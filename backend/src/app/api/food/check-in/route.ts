@@ -33,7 +33,13 @@ export async function POST(req: Request) {
     // QR credentials are opaque tokens; sequential participant IDs are never accepted as credentials.
     const participant = await db.participant.findUnique({
       where: { qrToken },
-      include: { team: true },
+      select: {
+        id: true,
+        fullName: true,
+        participantId: true,
+        passVerified: true,
+        team: { select: { status: true, teamName: true, registrationId: true } },
+      },
     });
     if (!participant) {
       return NextResponse.json(
@@ -60,27 +66,13 @@ export async function POST(req: Request) {
     }
 
     try {
-      const checkIn = await db.$transaction(async (tx) => {
-        const created = await tx.foodCheckIn.create({
-          data: {
-            participantId: participant.id,
-            mealId: meal.id,
-            checkedInById: ctx.userId,
-          },
-          include: {
-            participant: { include: { team: true } },
-            meal: true,
-          },
-        });
-        await tx.auditLog.create({
-          data: {
-            userId: ctx.userId,
-            teamId: participant.teamId,
-            action: "FOOD_CHECKIN",
-            detail: `${meal.label} - ${participant.fullName}`,
-          },
-        });
-        return created;
+      const checkIn = await db.foodCheckIn.create({
+        data: {
+          participantId: participant.id,
+          mealId: meal.id,
+          checkedInById: ctx.userId,
+        },
+        select: { id: true, createdAt: true },
       });
 
       return NextResponse.json({
@@ -103,6 +95,7 @@ export async function POST(req: Request) {
         // Unique constraint — already checked in
         const existing = await db.foodCheckIn.findUnique({
           where: { participantId_mealId: { participantId: participant.id, mealId: meal.id } },
+          select: { createdAt: true },
         });
         return NextResponse.json(
           {

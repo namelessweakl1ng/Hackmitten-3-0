@@ -18,21 +18,18 @@ import { readPrivateFile } from "@/lib/upload";
  *   - No screenshot → 404
  *   - Never returns a raw private storage URL or local file path
  */
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     await requirePermission("registration:view");
     const { id } = await params;
 
-    const payment = await db.payment.findUnique({
-      where: { id },
-      include: { screenshots: true },
+    const screenshotId = new URL(req.url).searchParams.get("screenshotId");
+    const screenshot = await db.paymentScreenshot.findFirst({
+      where: { paymentId: id, ...(screenshotId ? { id: screenshotId } : {}) },
+      orderBy: { createdAt: "desc" },
+      select: { filePath: true },
     });
-    if (!payment) return NextResponse.json({ error: "Payment not found" }, { status: 404 });
-    if (payment.screenshots.length === 0) {
-      return NextResponse.json({ error: "No screenshot" }, { status: 404 });
-    }
-
-    const screenshot = payment.screenshots[0];
+    if (!screenshot) return NextResponse.json({ error: "No screenshot" }, { status: 404 });
     const filePath = screenshot.filePath;
 
     // Private files are read only from the configured persistent storage root.

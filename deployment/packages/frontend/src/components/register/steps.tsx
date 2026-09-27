@@ -326,7 +326,7 @@ export function StepDetails() {
 // ─── STEP 3: PAYMENT ─────────────────────────────────────────────────────────
 
 const REGISTRATION_FEE = "₹1,000";
-const OFFICIAL_UPI_ID = "hackmitten@upi";
+const OFFICIAL_UPI_ID = "mitthandavapura.99649826@hdfcbank";
 const PAYMENT_QR = "/images/QRcode/payment-qr.png";
 
 export function StepPayment() {
@@ -334,8 +334,7 @@ export function StepPayment() {
     transactionId, setTransactionId,
     screenshot, screenshotPreview, setScreenshot,
     next, prev, serverError, submitting,
-    setTeamId, setPaymentId, setScreenshotPath,
-    setAcknowledgementEmailSent,
+    teamId, setTeamId, setAcknowledgementEmailSent,
     teamName, college, members,
     setServerError, setSubmitting,
   } = useRegisterStore();
@@ -355,38 +354,44 @@ export function StepPayment() {
     setServerError(null);
     setSubmitting(true);
     try {
-      // 1. Create the team (the server derives the first member as leader)
-      const registrationForm = new FormData();
-      registrationForm.append("registration", JSON.stringify({ teamName, college, members: members.map(({ participantImage: _image, ...member }) => member) }));
-      members.forEach((member, index) => { if (member.participantImage) registrationForm.append(`participantImage${index}`, member.participantImage); });
-      const regRes = await fetch("/api/registrations", { method: "POST", body: registrationForm });
-      const regJson = await regRes.json();
-      if (!regRes.ok) throw new Error(regJson.error || "Registration failed");
-      const newTeamId = regJson.team.id;
-      setTeamId(newTeamId);
-      setAcknowledgementEmailSent(regJson.acknowledgementEmailSent === true);
+      // A payment or upload may fail after the team was created. Resume that
+      // registration on retry instead of creating a duplicate team.
+      let activeTeamId = teamId;
+      if (!activeTeamId) {
+        const registrationForm = new FormData();
+        registrationForm.append("registration", JSON.stringify({ teamName, college, members: members.map(({ participantImage: _image, ...member }) => member) }));
+        members.forEach((member, index) => { if (member.participantImage) registrationForm.append(`participantImage${index}`, member.participantImage); });
+        const regRes = await fetch("/api/registrations", { method: "POST", body: registrationForm });
+        const regJson = await regRes.json().catch(() => ({}));
+        if (!regRes.ok) throw new Error(regJson.error || "Registration failed");
+        activeTeamId = regJson.team.id;
+        setTeamId(activeTeamId);
+        setAcknowledgementEmailSent(regJson.acknowledgementEmailSent === true);
+      }
 
-      // 2. Submit payment (transaction ID)
-      const payRes = await fetch(`/api/registrations/${newTeamId}/payment`, {
+      // Repeating this call with the same transaction ID is safe and preserves
+      // its proof. A changed ID resets the old proof on the server.
+      const payRes = await fetch(`/api/registrations/${activeTeamId}/payment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transactionId }),
+        body: JSON.stringify({ transactionId: transactionId.trim() }),
       });
-      const payJson = await payRes.json();
-      if (!payRes.ok) throw new Error(payJson.error || "Payment submission failed");
-      setPaymentId(payJson.payment.id);
+      const payJson = await payRes.json().catch(() => ({}));
+      if (!payRes.ok) {
+        if (payRes.status === 401) throw new Error(`Payment access expired. Contact the coordinator with registration reference ${activeTeamId}.`);
+        throw new Error(payJson.error || "Payment submission failed");
+      }
 
-      // 3. Upload screenshot
-      if (screenshot) {
-        const form = new FormData();
-        form.append("file", screenshot);
-        const upRes = await fetch(`/api/registrations/${newTeamId}/payment-screenshot`, {
-          method: "POST",
-          body: form,
-        });
-        const upJson = await upRes.json();
-        if (!upRes.ok) throw new Error(upJson.error || "Screenshot upload failed");
-        setScreenshotPath(upJson.screenshot.filePath);
+      const form = new FormData();
+      form.append("file", screenshot!);
+      const upRes = await fetch(`/api/registrations/${activeTeamId}/payment-screenshot`, {
+        method: "POST",
+        body: form,
+      });
+      const upJson = await upRes.json().catch(() => ({}));
+      if (!upRes.ok) {
+        if (upRes.status === 401) throw new Error(`Payment access expired. Contact the coordinator with registration reference ${activeTeamId}.`);
+        throw new Error(upJson.error || "Screenshot upload failed");
       }
 
       next();
@@ -481,13 +486,17 @@ export function StepPayment() {
       )}
 
       <div className="mt-8 md:mt-10 flex items-center justify-between">
-        <button
-          onClick={prev}
-          disabled={submitting}
-          className="flex items-center gap-2 text-sm text-[#A8A8A8] hover:text-white transition-colors disabled:opacity-50 min-h-[44px]"
-        >
-          <ArrowLeft size={14} /> Back
-        </button>
+        {teamId ? (
+          <span className="text-xs text-[#A8A8A8]">Team details submitted</span>
+        ) : (
+          <button
+            onClick={prev}
+            disabled={submitting}
+            className="flex items-center gap-2 text-sm text-[#A8A8A8] hover:text-white transition-colors disabled:opacity-50 min-h-[44px]"
+          >
+            <ArrowLeft size={14} /> Back
+          </button>
+        )}
         <button
           disabled={!valid || submitting}
           onClick={submitAll}

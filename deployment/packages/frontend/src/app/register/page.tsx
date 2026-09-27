@@ -14,6 +14,10 @@ import { useEventState } from "@/components/auth/use-event-state";
 
 export default function RegisterPage() {
   const step = useRegisterStore((s) => s.step);
+  const teamId = useRegisterStore((s) => s.teamId);
+  // An existing registration can finish payment even when new registrations
+  // have closed or filled up. The backend still checks its access cookie.
+  const continuingRegistration = Boolean(teamId) && step >= 3;
   const eventState = useEventState();
   const regOpen = eventState.data?.registrationOpen;
   const loading = eventState.isLoading;
@@ -37,7 +41,7 @@ export default function RegisterPage() {
   }
 
   // If registration is manually closed (admin toggle off), show that
-  if (manuallyClosed) {
+  if (manuallyClosed && !continuingRegistration) {
     return (
       <main className="relative min-h-screen bg-[#030303] text-white flex items-center justify-center px-5">
         <div
@@ -71,7 +75,7 @@ export default function RegisterPage() {
   }
 
   // If registration is full (capacity reached)
-  if (isFull) {
+  if (isFull && !continuingRegistration) {
     return (
       <main className="relative min-h-screen bg-[#030303] text-white flex items-center justify-center px-5">
         <div
@@ -105,7 +109,7 @@ export default function RegisterPage() {
   }
 
   // If registration is closed (deadline passed), show a clean closed state
-  if (regOpen === false) {
+  if (regOpen === false && !continuingRegistration) {
     return (
       <main className="relative min-h-screen bg-[#030303] text-white flex items-center justify-center px-5">
         <div

@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requirePermission, jsonError } from "@/lib/api-auth";
-import { recordChange, snapshotRow } from "@/lib/change-history";
-import { writeAudit } from "@/lib/audit";
 import { sendEmail, approvalEmailHtml, approvalEmailText, type EmailResult } from "@/lib/email";
 import {
   generateQrToken,
@@ -22,17 +20,21 @@ import {
  *  - assign participantId + qrToken to each member
  *  - mark team APPROVED
  *  - mark each participant passVerified = true
- *  - write audit log + change history (enables rollback)
  *  - send the approval email to the team leader (only on the first approval)
  */
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const ctx = await requirePermission("team:approve");
+    await requirePermission("team:approve");
     const { id } = await params;
 
     const team = await db.team.findUnique({
       where: { id },
-      include: { payment: true, members: true },
+      select: {
+        id: true,
+        teamName: true,
+        status: true,
+        payment: { select: { status: true } },
+      },
     });
     if (!team) return NextResponse.json({ error: "Team not found" }, { status: 404 });
     if (team.status === "APPROVED") {
@@ -45,8 +47,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       );
     }
 
-    // Capture previous state for rollback
-    const previousSnapshot = snapshotRow(team);
     // Detect the genuine first-time PENDING → APPROVED transition.
     // We only send approval emails when this is the team's FIRST approval —
     // i.e. the team has no registrationId yet (a re-approval after a revert
@@ -62,73 +62,66 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       if (!current) throw new Error("TEAM_NOT_FOUND");
       if (current.status === "APPROVED") throw new Error("TEAM_ALREADY_APPROVED");
       if (current.payment?.status !== "VERIFIED") throw new Error("PAYMENT_NOT_VERIFIED");
-      const allocatedIds = await tx.team.findMany({
-        where: { registrationId: { not: null } },
-        select: { registrationId: true },
-      });
-      const seq = nextRegistrationSequence(allocatedIds.map((row) => row.registrationId));
-      const regId = generateRegistrationId(seq);
-      const transition = await tx.team.updateMany({
-        where: { id, status: { notIn: ["APPROVED", "REJECTED"] } },
-        data: { status: "APPROVED", registrationId: regId },
-      });
-      if (transition.count !== 1) throw new Error("TEAM_STATUS_CHANGED");
-      const updatedTeam = await tx.team.findUniqueOrThrow({ where: { id } });
+      const firstApproval = !current.registrationId;
+      let regId = current.registrationId;
+      if (firstApproval) {
+        const allocatedIds = await tx.team.findMany({
+          where: { registrationId: { not: null } },
+          select: { registrationId: true },
+        });
+        const seq = nextRegistrationSequence(allocatedIds.map((row) => row.registrationId));
+        regId = generateRegistrationId(seq);
 
-      // Assign participant IDs + opaque QR tokens
-      const members = await tx.participant.findMany({
-        where: { teamId: id },
-        orderBy: { createdAt: "asc" },
-      });
-      for (let i = 0; i < members.length; i++) {
-        const p = members[i];
-        await tx.participant.update({
-          where: { id: p.id },
-          data: {
-            participantId: generateParticipantId(seq, i + 1),
-            qrToken: generateQrToken(),
-            passVerified: true,
+        const members = await tx.participant.findMany({
+          where: { teamId: id },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: { id: true },
+        });
+        for (let index = 0; index < members.length; index++) {
+          await tx.participant.update({
+            where: { id: members[index].id },
+            data: {
+              participantId: generateParticipantId(seq, index + 1),
+              qrToken: generateQrToken(),
+              passVerified: true,
+            },
+          });
+        }
+      } else {
+        // A reverted approval keeps its original passes; never rotate their QR tokens.
+        const incomplete = await tx.participant.count({
+          where: {
+            teamId: id,
+            OR: [{ participantId: null }, { qrToken: null }, { passVerified: false }],
           },
         });
+        if (incomplete > 0) throw new Error("INCOMPLETE_PASSES");
       }
 
-      await tx.auditLog.create({
-        data: {
-          userId: ctx.userId,
-          teamId: id,
-          action: "TEAM_APPROVED",
-          detail: `Registration ID ${regId}; ${members.length} participants${current.registrationId ? " (re-approval; no email sent)" : ""}`,
-        },
+      const transition = await tx.team.updateMany({
+        where: { id, status: { notIn: ["APPROVED", "REJECTED"] } },
+        data: { status: "APPROVED", ...(firstApproval ? { registrationId: regId } : {}) },
       });
-      await tx.changeHistory.create({
-        data: {
-          section: "TEAM",
-          entityId: id,
-          entityType: "Team",
-          action: "APPROVE",
-          previousState: JSON.stringify(previousSnapshot),
-          newState: JSON.stringify(snapshotRow(updatedTeam)),
-          changedById: ctx.userId,
-        },
+      if (transition.count !== 1) throw new Error("TEAM_STATUS_CHANGED");
+      const updatedTeam = await tx.team.findUniqueOrThrow({
+        where: { id },
+        select: { id: true, teamName: true, status: true, registrationId: true },
       });
-
-      return { team: updatedTeam, registrationId: regId, firstApproval: !current.registrationId };
+      return { team: updatedTeam, registrationId: regId!, firstApproval };
     });
     const regId = result.registrationId;
 
     // Send one approval email to the leader — ONLY on the first approval.
     // Re-approvals after a revert (registrationId already existed) skip the email
     // to avoid duplicate notifications.
-    const refreshed = await db.team.findUnique({
-      where: { id },
-      include: { members: true, payment: true },
-    });
-
     if (result.firstApproval) {
       // Wait for the provider attempt, but do not roll back committed approval
       // state when delivery is unavailable or rejected.
       const baseUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, "") || "";
-      const leader = refreshed?.members.find((member) => member.isLeader);
+      const leader = await db.participant.findFirst({
+        where: { teamId: id, isLeader: true },
+        select: { email: true, qrToken: true, fullName: true, participantId: true },
+      });
       let emailResult: EmailResult = { success: false, message: "Leader email or pass is missing", provider: "configuration" };
       if (!leader?.email || !leader.qrToken || !baseUrl) {
         console.error("[approval-email] delivery skipped", {
@@ -166,13 +159,19 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
           });
         }
       }
-      return NextResponse.json({ team: refreshed, emailSent: emailResult.success });
+      return NextResponse.json({ team: result.team, emailSent: emailResult.success });
     } else {
       console.log("[approval-email] duplicate suppressed", { teamId: id, reason: "re-approval" });
     }
 
-    return NextResponse.json({ team: refreshed });
+    return NextResponse.json({ team: result.team });
   } catch (err) {
+    if (err instanceof Error && err.message === "INCOMPLETE_PASSES") {
+      return NextResponse.json({ error: "Existing passes are incomplete; approval cannot be safely restored" }, { status: 409 });
+    }
+    if (err instanceof Error && err.message === "TEAM_NOT_FOUND") {
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    }
     if (err instanceof Error && err.message === "TEAM_ALREADY_APPROVED") {
       return NextResponse.json({ error: "Already approved" }, { status: 409 });
     }
@@ -193,36 +192,21 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const ctx = await requirePermission("team:approve");
+    await requirePermission("team:approve");
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
     if (body?.action !== "revert") {
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
-    const team = await db.team.findUnique({ where: { id } });
+    const team = await db.team.findUnique({ where: { id }, select: { status: true } });
     if (!team) return NextResponse.json({ error: "Team not found" }, { status: 404 });
     if (team.status !== "APPROVED") {
       return NextResponse.json({ error: "Team is not approved" }, { status: 400 });
     }
-    const previousSnapshot = snapshotRow(team);
     const updated = await db.team.update({
       where: { id },
       data: { status: "PAYMENT_VERIFIED" },
-    });
-    await recordChange({
-      section: "TEAM",
-      entityId: id,
-      entityType: "Team",
-      action: "REVERT_APPROVAL",
-      previousState: previousSnapshot,
-      newState: snapshotRow(updated),
-      changedById: ctx.userId,
-    });
-    await writeAudit({
-      userId: ctx.userId,
-      teamId: id,
-      action: "TEAM_APPROVAL_REVERTED",
-      detail: `Reverted from APPROVED to PAYMENT_VERIFIED (registration ID ${team.registrationId} preserved)`,
+      select: { id: true, teamName: true, registrationId: true, status: true },
     });
     return NextResponse.json({ team: updated });
   } catch (err) {

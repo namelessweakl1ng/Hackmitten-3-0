@@ -10,6 +10,10 @@ describe("CSV export", () => {
   it("neutralizes spreadsheet formula cells", () => {
     expect(csvCell("=HYPERLINK(\"bad\")")).toBe('"\'=HYPERLINK(""bad"")"');
     expect(csvCell("@SUM(A1)")).toBe('"\'@SUM(A1)"');
+    expect(csvCell("\n=1+1")).toBe('"\'\n=1+1"');
+    expect(csvCell("\f+SUM(A1)")).toBe('"\'\f+SUM(A1)"');
+    expect(csvCell("\u00a0@SUM(A1)")).toBe('"\'\u00a0@SUM(A1)"');
+    expect(csvCell("\u200b-CMD")).toBe('"\'\u200b-CMD"');
   });
 
   it("exports deterministic UTF-8 BOM and CRLF rows", () => {

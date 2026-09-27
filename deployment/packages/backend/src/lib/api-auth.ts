@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { PermissionError } from "@/lib/permissions";
 import type { Permission } from "@/lib/permissions";
 import { can } from "@/lib/permissions";
@@ -12,22 +13,41 @@ export interface AuthContext {
   name?: string | null;
 }
 
-/**
- * Require an authenticated session. Returns the user context.
- * Throws PermissionError(401) if not authenticated.
- */
+/** JWT claims must still describe a live account at its current version. */
+export function isCurrentSessionUser(
+  sessionUser: { id: string; role: Role; sessionVersion: number },
+  currentUser: { id: string; role: Role; updatedAt: Date } | null,
+): boolean {
+  return Boolean(currentUser &&
+    currentUser.id === sessionUser.id &&
+    currentUser.role === sessionUser.role &&
+    currentUser.updatedAt.getTime() === sessionUser.sessionVersion);
+}
+
+function authenticationRequired(): PermissionError {
+  const error = new PermissionError("Authentication required");
+  error.statusCode = 401;
+  return error;
+}
+
+/** Require a live, unchanged account for every protected API request. */
 export async function requireSession(): Promise<AuthContext> {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id || !session.user.role) {
-    const err = new PermissionError("Authentication required") as any;
-    err.statusCode = 401;
-    throw err;
+  if (!session?.user?.id || !session.user.role || !Number.isSafeInteger(session.user.sessionVersion)) {
+    throw authenticationRequired();
+  }
+  const currentUser = await db.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true, role: true, email: true, name: true, updatedAt: true },
+  });
+  if (!currentUser || !isCurrentSessionUser(session.user, currentUser)) {
+    throw authenticationRequired();
   }
   return {
-    userId: session.user.id,
-    role: session.user.role,
-    email: session.user.email,
-    name: session.user.name,
+    userId: currentUser.id,
+    role: currentUser.role,
+    email: currentUser.email,
+    name: currentUser.name,
   };
 }
 

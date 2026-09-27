@@ -1,0 +1,3 @@
+[test]
+# The tracked deployment source snapshot is excluded from active workspace tests.
+pathIgnorePatterns = ["deployment/packages/**"]

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { access, cp, mkdir, readdir, readFile, rm } from "node:fs/promises";
+import { access, cp, mkdir, readdir, readFile, realpath, rm } from "node:fs/promises";
 
 const standaloneRoot = path.resolve(".next/standalone");
 const standalone = path.join(standaloneRoot, path.basename(process.cwd()));
@@ -26,8 +26,12 @@ for (const dependency of await readdir(nextDependencies)) {
     }
   }
 }
-const generatedPrismaClient = path.resolve("../node_modules/.prisma/client");
-const standalonePrismaClient = path.join(standalone, "node_modules/.prisma/client");
+// Bun stores @prisma/client and its generated .prisma sibling in the same package store.
+// Resolve both real package locations so this also works with npm-style installs.
+const prismaPackage = path.dirname(await realpath("node_modules/@prisma/client/package.json"));
+const generatedPrismaClient = path.resolve(prismaPackage, "../../.prisma/client");
+const standalonePrismaPackage = path.dirname(await realpath(path.join(standalone, "node_modules/@prisma/client/package.json")));
+const standalonePrismaClient = path.resolve(standalonePrismaPackage, "../../.prisma/client");
 await mkdir(path.dirname(standalonePrismaClient), { recursive: true });
 await cp(generatedPrismaClient, standalonePrismaClient, {
   recursive: true,

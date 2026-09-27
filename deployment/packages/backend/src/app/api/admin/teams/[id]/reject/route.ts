@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requirePermission, jsonError } from "@/lib/api-auth";
-import { writeAudit } from "@/lib/audit";
 import { sendEmail, rejectionEmailHtml, rejectionEmailText } from "@/lib/email";
 
 /**
@@ -11,7 +10,7 @@ import { sendEmail, rejectionEmailHtml, rejectionEmailText } from "@/lib/email";
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const ctx = await requirePermission("team:reject");
+    await requirePermission("team:reject");
     const { id } = await params;
     const body = await req.json();
     const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
@@ -30,17 +29,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       data: { status: "REJECTED" },
     });
     if (transition.count !== 1) return NextResponse.json({ error: "Team status has already changed" }, { status: 409 });
-    const updated = await db.team.findUnique({ where: { id }, include: { members: true } });
+    const updated = await db.team.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        teamName: true,
+        status: true,
+        registrationId: true,
+        members: { where: { isLeader: true }, select: { email: true }, take: 1 },
+      },
+    });
     if (!updated) return NextResponse.json({ error: "Team not found" }, { status: 404 });
 
-    await writeAudit({
-      userId: ctx.userId,
-      teamId: id,
-      action: "TEAM_REJECTED",
-      detail: reason,
-    });
-
-    const leader = updated.members.find((member) => member.isLeader);
+    const leader = updated.members[0];
     if (leader?.email) {
       const sent = await sendEmail({
         to: leader.email,
@@ -55,7 +56,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
     }
 
-    return NextResponse.json({ team: updated });
+    const { members: _members, ...safeTeam } = updated;
+    return NextResponse.json({ team: safeTeam });
   } catch (err) {
     return jsonError(err);
   }

@@ -1,6 +1,6 @@
 export function csvCell(value: string | null | undefined): string {
   if (value == null) return '""';
-  const safe = /^[\t\r ]*[=+@-]/.test(value) ? `'${value}` : value;
+  const safe = /^[\s\u200B-\u200D\u2060]*[=+@-]/.test(value) ? `'${value}` : value;
   return `"${safe.replace(/"/g, '""')}"`;
 }
 

@@ -17,14 +17,14 @@ type Team = {
   members: {
     id: string; fullName: string; email: string; phone: string; college: string;
     degree: string | null;
-    participantImagePath: string | null;
+    hasParticipantImage: boolean;
     participantId: string | null; qrToken: string | null; passVerified: boolean; isLeader: boolean;
   }[];
   payment: {
     id: string; status: string; transactionId: string | null;
     rejectionReason: string | null; verifiedAt: string | null;
     verifiedBy: { email: string; name: string | null } | null;
-    screenshots: { id: string; filePath: string; fileName: string; mimeType: string; sizeBytes: number }[];
+    screenshots: { id: string; fileName: string; mimeType: string; sizeBytes: number }[];
   } | null;
 };
 
@@ -43,15 +43,22 @@ export function AdminRegistrationDetail({ id }: { id: string }) {
   
   const qc = useQueryClient();
   const { data: session } = useSession();
-  const role = (session?.user as any)?.role;
+  const role = (session?.user as { role?: string } | undefined)?.role;
   const [busy, setBusy] = useState(false);
   const [rejectMode, setRejectMode] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery<{ team: Team }>({
+  const { data, isLoading, error: queryError } = useQuery<{ team: Team }>({
     queryKey: ["admin-registration", id],
-    queryFn: async () => (await fetch(`/api/admin/registrations/${id}`)).json(),
+    queryFn: async () => {
+      const response = await fetch(`/api/admin/registrations/${id}`);
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || `Unable to load registration (${response.status})`);
+      }
+      return response.json();
+    },
     refetchInterval: 10000,
   });
   const team = data?.team;
@@ -138,6 +145,9 @@ export function AdminRegistrationDetail({ id }: { id: string }) {
   if (isLoading) {
     return <div className="text-[#A8A8A8]">Loading…</div>;
   }
+  if (queryError) {
+    return <div role="alert" className="text-[#D83A43]">{queryError.message}</div>;
+  }
   if (!team) {
     return <div className="text-[#D83A43]">Team not found.</div>;
   }
@@ -202,7 +212,7 @@ export function AdminRegistrationDetail({ id }: { id: string }) {
         <div className="space-y-3">
           {team.members.map((m, i) => (
             <div key={m.id} className={`flex items-start gap-3 pb-3 border-b border-white/5 last:border-0 last:pb-0 ${m.isLeader ? "bg-[#B52A32]/5 -mx-2 px-2 rounded" : ""}`}>
-              {m.participantImagePath && <img src={`/api/admin/participants/${m.id}/image`} alt={`${m.fullName} participant photo`} className="h-16 w-16 rounded object-cover" />}
+              {m.hasParticipantImage && <img src={`/api/admin/participants/${m.id}/image`} alt={`${m.fullName} participant photo`} className="h-16 w-16 rounded object-cover" />}
               <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full mono text-xs ${
                 m.isLeader ? "bg-[#B52A32] text-white" : "bg-[#151515] text-[#B52A32]"
               }`}>
@@ -233,7 +243,7 @@ export function AdminRegistrationDetail({ id }: { id: string }) {
                   <div className="mono text-[10px] text-[#B52A32] mt-1">ID: {m.participantId}</div>
                 )}
                 {m.qrToken && (
-                  <Link href={`/pass/${m.qrToken}`} target="_blank" className="inline-flex items-center gap-1 text-[10px] text-[#A8A8A8] hover:text-white mt-1">
+                  <Link href={`/pass/${m.qrToken}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] text-[#A8A8A8] hover:text-white mt-1">
                     <ExternalLink size={10} /> View Digital Pass
                   </Link>
                 )}
@@ -292,7 +302,7 @@ export function AdminRegistrationDetail({ id }: { id: string }) {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {team.payment.screenshots.map((s) => (
-              <PaymentScreenshot key={s.id} paymentId={team.payment!.id} fileName={s.fileName} />
+              <PaymentScreenshot key={s.id} paymentId={team.payment!.id} screenshotId={s.id} fileName={s.fileName} />
             ))}
             {team.payment.screenshots.length === 0 && (
               <div className="text-xs text-[#A8A8A8]">No screenshot uploaded.</div>
@@ -435,7 +445,7 @@ export function AdminRegistrationDetail({ id }: { id: string }) {
   );
 }
 
-function PaymentScreenshot({ paymentId, fileName }: { paymentId: string; fileName: string }) {
+function PaymentScreenshot({ paymentId, screenshotId, fileName }: { paymentId: string; screenshotId: string; fileName: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -445,7 +455,7 @@ function PaymentScreenshot({ paymentId, fileName }: { paymentId: string; fileNam
 
     (async () => {
       try {
-        const res = await fetch(`/api/admin/payments/${paymentId}/screenshot`, {
+        const res = await fetch(`/api/admin/payments/${paymentId}/screenshot?screenshotId=${encodeURIComponent(screenshotId)}`, {
           cache: "no-store",
         });
 
@@ -481,7 +491,7 @@ function PaymentScreenshot({ paymentId, fileName }: { paymentId: string; fileNam
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [paymentId]);
+  }, [paymentId, screenshotId]);
 
   if (loading) {
     return (

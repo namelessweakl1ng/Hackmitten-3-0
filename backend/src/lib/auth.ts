@@ -104,22 +104,25 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name ?? user.username,
           role: user.role,
-        } as any;
+          sessionVersion: user.updatedAt.getTime(),
+        };
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = (user as any).id;
-        token.role = (user as any).role;
+        token.id = user.id;
+        token.role = user.role;
+        token.sessionVersion = user.sessionVersion;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).role = token.role;
+        session.user.id = token.id;
+        session.user.role = token.role;
+        session.user.sessionVersion = token.sessionVersion;
       }
       return session;
     },
@@ -137,10 +140,12 @@ declare module "next-auth" {
       email: string;
       name?: string | null;
       role: import("@prisma/client").Role;
+      sessionVersion: number;
     };
   }
   interface User {
     role: import("@prisma/client").Role;
+    sessionVersion: number;
   }
 }
 
@@ -148,5 +153,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     id: string;
     role: import("@prisma/client").Role;
+    sessionVersion: number;
   }
 }

@@ -34,11 +34,8 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  auditLogs          AuditLog[]
-  foodCheckIns       FoodCheckIn[]
-  verifiedPayments   Payment[]
-  changeHistory      ChangeHistory[]     @relation("ChangeHistoryChangedBy")
-  rolledBackChanges  ChangeHistory[]     @relation("ChangeHistoryRolledBackBy")
+  foodCheckIns     FoodCheckIn[]
+  verifiedPayments Payment[]
 
   @@index([role])
   @@index([username])
@@ -49,15 +46,14 @@ model User {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model EventConfig {
-  id                 String   @id @default("singleton")
-  registrationEnabled Boolean @default(true)
-  registrationLimit  Int?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                  String   @id @default("singleton")
+  registrationEnabled Boolean  @default(true)
+  registrationLimit   Int?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REGISTRATION DOMAIN
@@ -79,24 +75,23 @@ enum PaymentStatus {
 }
 
 model Team {
-  id             String             @id @default(cuid())
-  teamName       String             @unique
-  registrationId String?            @unique
-  registrationAccessTokenHash String? @unique
-  registrationAccessExpiresAt DateTime?
-  status         RegistrationStatus @default(DRAFT)
-  college        String?
-  registrationAcknowledgementAttemptedAt DateTime?
-  registrationAcknowledgementAttemptCount Int @default(0)
-  registrationAcknowledgementSentAt DateTime?
-  approvalEmailSentAt DateTime?
-  rejectionEmailSentAt DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  id                                      String             @id @default(cuid())
+  teamName                                String             @unique
+  registrationId                          String?            @unique
+  registrationAccessTokenHash             String?            @unique
+  registrationAccessExpiresAt             DateTime?
+  status                                  RegistrationStatus @default(DRAFT)
+  college                                 String?
+  registrationAcknowledgementAttemptedAt  DateTime?
+  registrationAcknowledgementAttemptCount Int                @default(0)
+  registrationAcknowledgementSentAt       DateTime?
+  approvalEmailSentAt                     DateTime?
+  rejectionEmailSentAt                    DateTime?
+  createdAt                               DateTime           @default(now())
+  updatedAt                               DateTime           @updatedAt
 
-  members   Participant[]
-  payment   Payment?
-  auditLogs AuditLog[]
+  members Participant[]
+  payment Payment?
 
   @@index([status])
   @@index([college])
@@ -104,23 +99,23 @@ model Team {
 }
 
 model Participant {
-  id            String   @id @default(cuid())
-  teamId        String
-  team          Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  fullName      String
-  email         String
-  phone         String
-  college       String
-  degree        String?
-  participantImagePath String?
-  participantImageMimeType String?
+  id                        String   @id @default(cuid())
+  teamId                    String
+  team                      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  fullName                  String
+  email                     String
+  phone                     String
+  college                   String
+  degree                    String?
+  participantImagePath      String?
+  participantImageMimeType  String?
   participantImageSizeBytes Int?
-  isLeader      Boolean  @default(false)
+  isLeader                  Boolean  @default(false)
   // Generated only after team approval
-  participantId String?  @unique
-  qrToken       String?  @unique
-  passVerified  Boolean  @default(false)
-  createdAt     DateTime @default(now())
+  participantId             String?  @unique
+  qrToken                   String?  @unique
+  passVerified              Boolean  @default(false)
+  createdAt                 DateTime @default(now())
 
   foodCheckIns FoodCheckIn[]
 
@@ -205,72 +200,3 @@ model FoodCheckIn {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-
-
-
-
-
-
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AUDIT LOG
-// ─────────────────────────────────────────────────────────────────────────────
-
-model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  teamId    String?
-  team      Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  action    String
-  detail    String?
-  createdAt DateTime @default(now())
-
-  @@index([userId])
-  @@index([teamId])
-  @@index([action])
-  @@index([createdAt])
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CHANGE HISTORY (for rollback)
-// ─────────────────────────────────────────────────────────────────────────────
-
-enum ChangeHistorySection {
-  EVENT_CONFIG
-  HERO
-  ABOUT
-  PHASE
-  GALLERY
-  SPONSOR
-  COORDINATOR
-  WINNER
-  MEAL
-  TEAM
-  PAYMENT
-  FOOD_CHECKIN
-}
-
-model ChangeHistory {
-  id             String               @id @default(cuid())
-  section        ChangeHistorySection
-  entityId       String // ID of the affected row (or "singleton" for EventConfig)
-  entityType     String // e.g. "EventConfig", "Sponsor", "Phase"
-  action         String // e.g. "UPDATE", "DELETE", "APPROVE", "REJECT"
-  previousState  String // JSON-encoded previous state (null for CREATE)
-  newState       String // JSON-encoded new state (null for DELETE)
-  changedById    String?
-  changedBy      User?                @relation("ChangeHistoryChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
-  rolledBack     Boolean              @default(false)
-  rolledBackById String?
-  rolledBackBy   User?                @relation("ChangeHistoryRolledBackBy", fields: [rolledBackById], references: [id], onDelete: SetNull)
-  rolledBackAt   DateTime?
-  createdAt      DateTime             @default(now())
-
-  @@index([section])
-  @@index([entityId])
-  @@index([changedById])
-  @@index([createdAt])
-  @@index([rolledBack])
-}

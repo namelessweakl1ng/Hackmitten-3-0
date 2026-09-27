@@ -14,31 +14,40 @@ type Meal = {
   enabled: boolean;
 };
 
+type MealDraft = Omit<Meal, "id" | "date"> & { date: string };
+
 const MEAL_TYPES = ["BREAKFAST", "LUNCH", "SNACKS", "DINNER", "CUSTOM"];
+
+async function mealRequest<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(typeof result.error === "string" ? result.error : `Meal request failed (${response.status})`);
+  }
+  return result as T;
+}
 
 export function MealManager() {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery<{ meals: Meal[] }>({
+  const { data, isLoading, error: queryError } = useQuery<{ meals: Meal[] }>({
     queryKey: ["admin-meals"],
-    queryFn: async () => (await fetch("/api/admin/meals")).json(),
+    queryFn: () => mealRequest<{ meals: Meal[] }>("/api/admin/meals"),
   });
   const meals: Meal[] = data?.meals ?? [];
 
   const [creating, setCreating] = useState(false);
-  const [draft, setDraft] = useState<any>({ type: "LUNCH", label: "", date: new Date().toISOString().slice(0, 10), startTime: "12:00", endTime: "14:00", enabled: true });
+  const [draft, setDraft] = useState<MealDraft>({ type: "LUNCH", label: "", date: new Date().toISOString().slice(0, 10), startTime: "12:00", endTime: "14:00", enabled: true });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const create = async () => {
     setBusy(true); setError(null);
     try {
-      const res = await fetch("/api/admin/meals", {
+      await mealRequest("/api/admin/meals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error || "Failed");
       setCreating(false);
       setDraft({ type: "LUNCH", label: "", date: new Date().toISOString().slice(0, 10), startTime: "12:00", endTime: "14:00", enabled: true });
       qc.invalidateQueries({ queryKey: ["admin-meals"] });
@@ -48,20 +57,30 @@ export function MealManager() {
   };
 
   const update = async (id: string, patch: Partial<Meal>) => {
-    await fetch(`/api/admin/meals/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    qc.invalidateQueries({ queryKey: ["admin-meals"] });
-    qc.invalidateQueries({ queryKey: ["meals"] });
+    setError(null);
+    try {
+      await mealRequest(`/api/admin/meals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      qc.invalidateQueries({ queryKey: ["admin-meals"] });
+      qc.invalidateQueries({ queryKey: ["meals"] });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to update meal");
+    }
   };
 
   const del = async (id: string) => {
-    if (!confirm("Delete this meal? Existing check-ins will be preserved.")) return;
-    await fetch(`/api/admin/meals/${id}`, { method: "DELETE" });
-    qc.invalidateQueries({ queryKey: ["admin-meals"] });
-    qc.invalidateQueries({ queryKey: ["meals"] });
+    if (!confirm("Delete this meal? Meals with existing check-ins cannot be deleted.")) return;
+    setError(null);
+    try {
+      await mealRequest(`/api/admin/meals/${id}`, { method: "DELETE" });
+      qc.invalidateQueries({ queryKey: ["admin-meals"] });
+      qc.invalidateQueries({ queryKey: ["meals"] });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to delete meal");
+    }
   };
 
   return (
@@ -77,7 +96,7 @@ export function MealManager() {
         </button>
       </header>
 
-      {error && <div className="glass rounded p-3 text-sm text-[#D83A43] border-l-2 border-[#B52A32]">{error}</div>}
+      {(error || queryError) && <div role="alert" className="glass rounded p-3 text-sm text-[#D83A43] border-l-2 border-[#B52A32]">{error || queryError?.message}</div>}
 
       {creating && (
         <div className="glass rounded-lg p-5 border-l-2 border-[#B52A32]">
@@ -109,18 +128,23 @@ export function MealManager() {
           <div key={m.id} className="glass rounded-lg p-4 flex items-center gap-4 flex-wrap">
             <div className="mono text-xs text-[#B52A32] w-20">{m.type}</div>
             <input
-              value={m.label}
-              onChange={(e) => update(m.id, { label: e.target.value })}
+              key={`${m.id}:${m.label}`}
+              aria-label={`${m.type} meal label`}
+              defaultValue={m.label}
+              onBlur={(e) => { if (e.target.value !== m.label) void update(m.id, { label: e.target.value }); }}
+              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
               className="flex-1 min-w-[120px] bg-transparent border-b border-white/10 text-sm text-white focus:border-[#B52A32] focus:outline-none pb-1"
             />
             <input
               type="date"
+              aria-label={`${m.label} meal date`}
               value={m.date || ""}
               onChange={(e) => update(m.id, { date: e.target.value })}
               className="bg-[#080808] border border-white/10 rounded px-2 py-1 text-xs text-white"
             />
             <input
               type="time"
+              aria-label={`${m.label} start time`}
               value={m.startTime}
               onChange={(e) => update(m.id, { startTime: e.target.value })}
               className="bg-[#080808] border border-white/10 rounded px-2 py-1 text-xs text-white"
@@ -128,17 +152,19 @@ export function MealManager() {
             <span className="text-[#A8A8A8]">—</span>
             <input
               type="time"
+              aria-label={`${m.label} end time`}
               value={m.endTime}
               onChange={(e) => update(m.id, { endTime: e.target.value })}
               className="bg-[#080808] border border-white/10 rounded px-2 py-1 text-xs text-white"
             />
             <button
+              aria-label={`${m.enabled ? "Disable" : "Enable"} ${m.label}`}
               onClick={() => update(m.id, { enabled: !m.enabled })}
               className={`text-xs px-3 py-1 rounded ${m.enabled ? "bg-[#B52A32]/20 text-[#D83A43]" : "bg-[#151515] text-[#A8A8A8]"}`}
             >
               {m.enabled ? "Enabled" : "Disabled"}
             </button>
-            <button onClick={() => del(m.id)} className="text-[#A8A8A8] hover:text-[#D83A43]" aria-label="Delete">
+            <button onClick={() => del(m.id)} className="text-[#A8A8A8] hover:text-[#D83A43]" aria-label={`Delete ${m.label}`}>
               <Trash2 size={14} />
             </button>
           </div>

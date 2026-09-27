@@ -23,10 +23,6 @@ interface RegisterState {
   // After POST /api/registrations
   teamId: string | null;
   acknowledgementEmailSent: boolean | null;
-  // After POST /api/registrations/:id/payment
-  paymentId: string | null;
-  // After upload — screenshot path on server
-  screenshotPath: string | null;
   // Last server error
   serverError: string | null;
   // Pending request flag
@@ -44,8 +40,6 @@ interface RegisterState {
   setScreenshot: (f: File | null) => void;
   setTeamId: (id: string | null) => void;
   setAcknowledgementEmailSent: (sent: boolean | null) => void;
-  setPaymentId: (id: string | null) => void;
-  setScreenshotPath: (p: string | null) => void;
   setServerError: (e: string | null) => void;
   setSubmitting: (s: boolean) => void;
   reset: () => void;
@@ -63,8 +57,6 @@ export const useRegisterStore = create<RegisterState>((set) => ({
   screenshotPreview: null,
   teamId: null,
   acknowledgementEmailSent: null,
-  paymentId: null,
-  screenshotPath: null,
   serverError: null,
   submitting: false,
 
@@ -98,8 +90,6 @@ export const useRegisterStore = create<RegisterState>((set) => ({
     }),
   setTeamId: (id) => set({ teamId: id }),
   setAcknowledgementEmailSent: (sent) => set({ acknowledgementEmailSent: sent }),
-  setPaymentId: (id) => set({ paymentId: id }),
-  setScreenshotPath: (p) => set({ screenshotPath: p }),
   setServerError: (e) => set({ serverError: e }),
   setSubmitting: (s) => set({ submitting: s }),
   reset: () =>
@@ -117,8 +107,6 @@ export const useRegisterStore = create<RegisterState>((set) => ({
         screenshotPreview: null,
         teamId: null,
         acknowledgementEmailSent: null,
-        paymentId: null,
-        screenshotPath: null,
         serverError: null,
         submitting: false,
       };

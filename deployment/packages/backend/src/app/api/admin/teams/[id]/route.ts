@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requirePermission, jsonError } from "@/lib/api-auth";
-import { writeAudit } from "@/lib/audit";
-import { recordChange, snapshotRow } from "@/lib/change-history";
 import { z } from "zod";
 import { deletePrivateFile } from "@/lib/upload";
+import { ADMIN_TEAM_SELECT } from "@/lib/admin-team-view";
 
 /**
  * PATCH /api/admin/teams/:id
@@ -13,17 +12,15 @@ import { deletePrivateFile } from "@/lib/upload";
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const ctx = await requirePermission("team:approve");
+    await requirePermission("team:approve");
     const { id } = await params;
     const body = await req.json();
 
     const team = await db.team.findUnique({ where: { id }, include: { members: true } });
     if (!team) return NextResponse.json({ error: "Team not found" }, { status: 404 });
 
-    const previousSnapshot = snapshotRow(team);
-
     // Update team name + college
-    const updateData: any = {};
+    const updateData: { teamName?: string; college?: string | null } = {};
     if (body.teamName && body.teamName !== team.teamName) {
       const clash = await db.team.findUnique({ where: { teamName: body.teamName } });
       if (clash && clash.id !== id) {
@@ -50,6 +47,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
       // Transactional member update
       const newMemberIds = parsed.data.filter((m) => m.id).map((m) => m.id!);
+      const currentMemberIds = new Set(team.members.map((member) => member.id));
+      if (new Set(newMemberIds).size !== newMemberIds.length || newMemberIds.some((memberId) => !currentMemberIds.has(memberId))) {
+        return NextResponse.json({ error: "Member IDs must be unique and belong to this team" }, { status: 400 });
+      }
+      if ((team.registrationId || team.status === "APPROVED") && newMemberIds.length !== team.members.length) {
+        return NextResponse.json(
+          { error: "Members cannot be added or removed after passes are issued" },
+          { status: 409 },
+        );
+      }
       const removedImagePaths = team.members
         .filter((member) => !newMemberIds.includes(member.id) && member.participantImagePath)
         .map((member) => member.participantImagePath!);
@@ -97,23 +104,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       await db.team.update({ where: { id }, data: updateData });
     }
 
-    const updated = await db.team.findUnique({ where: { id }, include: { members: true } });
+    const updated = await db.team.findUniqueOrThrow({ where: { id }, select: ADMIN_TEAM_SELECT });
 
-    await recordChange({
-      section: "TEAM",
-      entityId: id,
-      entityType: "Team",
-      action: "UPDATE",
-      previousState: previousSnapshot,
-      newState: snapshotRow(updated),
-      changedById: ctx.userId,
-    });
-    await writeAudit({
-      userId: ctx.userId,
-      teamId: id,
-      action: "TEAM_EDITED",
-      detail: `Team ${updated?.teamName} edited`,
-    });
 
     return NextResponse.json({ team: updated });
   } catch (err) {
@@ -130,12 +122,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
  *   - Payment (cascade from Team)
  *   - FoodCheckIn (cascade from Participant)
  *   - Participant (cascade from Team)
- *   - AuditLog teamId references (set null)
- *   - ChangeHistory entityId references (kept — string, not FK)
  */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const ctx = await requirePermission("team:approve");
+    await requirePermission("team:approve");
     const { id } = await params;
 
     const team = await db.team.findUnique({
@@ -147,25 +137,6 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     });
     if (!team) return NextResponse.json({ error: "Team not found" }, { status: 404 });
 
-    const teamName = team.teamName;
-    const regId = team.registrationId;
-    const memberCount = team.members.length;
-
-    // Record the deletion BEFORE the team is gone
-    await recordChange({
-      section: "TEAM",
-      entityId: id,
-      entityType: "Team",
-      action: "DELETE",
-      previousState: snapshotRow(team),
-      newState: null,
-      changedById: ctx.userId,
-    });
-    await writeAudit({
-      userId: ctx.userId,
-      action: "TEAM_DELETED",
-      detail: `Deleted team ${teamName}${regId ? ` (${regId})` : ""} · ${memberCount} members`,
-    });
 
     // Delete the team — cascades handle participants, payments, screenshots, food check-ins
     await db.team.delete({ where: { id } });

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Pencil, X, Loader2, Crown, AlertTriangle, Search } from "lucide-react";
+import { fetchJson } from "@/lib/api-fetch";
 
 type Team = {
   id: string;
@@ -33,9 +34,9 @@ export function TeamManager() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery<{ teams: Team[] }>({
+  const { data, isLoading, error: queryError } = useQuery<{ teams: Team[] }>({
     queryKey: ["admin-teams"],
-    queryFn: async () => (await fetch("/api/admin/teams")).json(),
+    queryFn: () => fetchJson("/api/admin/teams"),
   });
   const teams: Team[] = data?.teams ?? [];
   const filtered = teams.filter((t) => {
@@ -75,7 +76,7 @@ export function TeamManager() {
         </button>
       </header>
 
-      {error && <div className="glass rounded p-3 text-sm text-[#D83A43] border-l-2 border-[#B52A32]">{error}</div>}
+      {(error || queryError) && <div role="alert" className="glass rounded p-3 text-sm text-[#D83A43] border-l-2 border-[#B52A32]">{error || queryError?.message}</div>}
 
       {/* Search */}
       <div className="relative max-w-md">

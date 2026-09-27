@@ -3,6 +3,20 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, UtensilsCrossed } from "lucide-react";
+import { fetchJson } from "@/lib/api-fetch";
+
+type HistoryMeal = { id: string; label: string };
+type HistoryCheckIn = {
+  id: string;
+  createdAt: string;
+  participant: {
+    fullName: string;
+    participantId: string | null;
+    team: { teamName: string; registrationId: string | null };
+  };
+  meal: { label: string };
+  checkedInBy: { email: string } | null;
+};
 
 export function AdminFoodHistory() {
   const [q, setQ] = useState("");
@@ -10,13 +24,16 @@ export function AdminFoodHistory() {
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
-  const { data: mealsData } = useQuery({
+  const { data: mealsData, error: mealsError } = useQuery<{ meals: HistoryMeal[] }>({
     queryKey: ["meals"],
-    queryFn: async () => (await fetch("/api/meals")).json(),
+    queryFn: () => fetchJson("/api/meals"),
   });
-  const meals: any[] = mealsData?.meals ?? [];
+  const meals = mealsData?.meals ?? [];
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error: historyError } = useQuery<{
+    checkIns: HistoryCheckIn[];
+    pagination: { total: number };
+  }>({
     queryKey: ["food-check-ins", q, mealId, page],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -24,13 +41,12 @@ export function AdminFoodHistory() {
       if (mealId) params.set("mealId", mealId);
       params.set("page", String(page));
       params.set("pageSize", String(pageSize));
-      const r = await fetch(`/api/food/check-ins?${params.toString()}`);
-      return r.json();
+      return fetchJson(`/api/food/check-ins?${params.toString()}`);
     },
     refetchInterval: 15000,
   });
 
-  const checkIns: any[] = data?.checkIns ?? [];
+  const checkIns = data?.checkIns ?? [];
   const total = data?.pagination?.total ?? 0;
 
   return (
@@ -44,6 +60,12 @@ export function AdminFoodHistory() {
           {total} total check-ins · use the food admin scanner for live check-ins
         </p>
       </header>
+
+      {(mealsError || historyError) && (
+        <div role="alert" className="glass rounded p-3 text-sm text-[#D83A43] border-l-2 border-[#B52A32]">
+          {historyError?.message || mealsError?.message}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="glass rounded-lg p-4 flex flex-col md:flex-row gap-3">
@@ -85,6 +107,8 @@ export function AdminFoodHistory() {
             <tbody className="divide-y divide-white/5">
               {isLoading ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-[#A8A8A8]">Loading…</td></tr>
+              ) : historyError ? (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-[#D83A43]">Unable to load check-ins.</td></tr>
               ) : checkIns.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-[#A8A8A8]">

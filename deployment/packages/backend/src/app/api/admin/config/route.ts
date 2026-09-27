@@ -1,7 +1,6 @@
 ﻿import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requirePermission, jsonError } from "@/lib/api-auth";
-import { writeAudit } from "@/lib/audit";
 import { ensureSingletonEventConfig } from "@/lib/bootstrap";
 
 export async function GET() {
@@ -17,7 +16,7 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const actor = await requirePermission("config:edit");
+    await requirePermission("config:edit");
     const body: unknown = await request.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid registration settings" }, { status: 400 });
     const data = body as Record<string, unknown>;
@@ -31,7 +30,6 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Registration enabled must be boolean and limit must be a positive integer or null" }, { status: 400 });
     }
     const updated = await db.eventConfig.update({ where: { id: "singleton" }, data: { registrationEnabled: enabled, registrationLimit: limit } });
-    await writeAudit({ userId: actor.userId, action: "CONFIG_UPDATED", detail: "Registration controls updated" });
     return NextResponse.json({ config: { registrationEnabled: updated.registrationEnabled, registrationLimit: updated.registrationLimit } });
   } catch (error) { return jsonError(error); }
 }

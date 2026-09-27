@@ -28,12 +28,11 @@
 
 ## Admin
 
-- `GET /api/admin/stats`, `/registrations`, `/teams`, `/users`, `/config`, `/audit`, `/change-history`, `/export`
-- `POST /api/admin/teams`, `/users`, `/meals`, `/credentials`, `/audit/bulk-delete`
+- `GET /api/admin/stats`, `/registrations`, `/teams`, `/users`, `/config`, `/export`
+- `POST /api/admin/teams`, `/users`, `/meals`, `/credentials`
 - `PATCH /api/admin/config`, `/teams/:id`, `/teams/:id/approve`, `/meals/:id`
-- `DELETE /api/admin/teams/:id`, `/users/:id`, `/meals/:id`, `/audit/:id`
+- `DELETE /api/admin/teams/:id`, `/users/:id`, `/meals/:id`
 - Payment actions: `POST /api/admin/payments/:id/verify` and `/reject`; authorized screenshot and participant-image reads are `GET /api/admin/payments/:id/screenshot` and `/api/admin/participants/:id/image`.
-- Change-history rollback: `POST /api/admin/change-history/:id/rollback`.
 
 ## Coordinator
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Users, Crown, X, Download, UtensilsCrossed, Check, Clock, FileSpreadsheet } from "lucide-react";
 import QRCode from "qrcode";
@@ -21,6 +21,7 @@ type ApprovedTeam = {
     college: string;
     degree: string | null;
     hasParticipantImage: boolean;
+    participantImageFileName: string | null;
   }[];
 };
 
@@ -37,10 +38,18 @@ export function CoordinatorPortal() {
   const [tab, setTab] = useState<"teams" | "meals">("teams");
   const [search, setSearch] = useState("");
   const [selectedTeam, setSelectedTeam] = useState<ApprovedTeam | null>(null);
+  const closeTeamButtonRef = useRef<HTMLButtonElement>(null);
 
-  const { data, isLoading } = useQuery<{ teams: ApprovedTeam[] }>({
+  useEffect(() => {
+    if (!selectedTeam) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeTeamButtonRef.current?.focus();
+    return () => previousFocus?.focus();
+  }, [selectedTeam]);
+
+  const { data, isLoading, error } = useQuery<{ teams: ApprovedTeam[] }>({
     queryKey: ["coordinator-teams"],
-    queryFn: async () => (await fetch("/api/coordinator/teams")).json(),
+    queryFn: () => fetchCoordinatorData("/api/coordinator/teams"),
   });
   const teams: ApprovedTeam[] = data?.teams ?? [];
 
@@ -107,6 +116,8 @@ export function CoordinatorPortal() {
 
           {isLoading ? (
             <div className="text-[#A8A8A8] text-sm">Loading…</div>
+          ) : error ? (
+            <div role="alert" className="glass rounded-lg p-6 text-sm text-[#D83A43]">{error.message}</div>
           ) : teams.length === 0 ? (
             <div className="glass rounded-lg p-8 text-center">
               <Users size={24} className="mx-auto text-[#A8A8A8] opacity-50 mb-3" />
@@ -146,14 +157,36 @@ export function CoordinatorPortal() {
       {/* Team details modal */}
       {selectedTeam && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedTeam(null)}>
-          <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="coordinator-team-title"
+            className="bg-[#0a0a0a] border border-white/10 rounded-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setSelectedTeam(null);
+              } else if (e.key === "Tab") {
+                const focusable = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('a[href], button:not([disabled])'));
+                const first = focusable[0];
+                const last = focusable.at(-1);
+                if (e.shiftKey && document.activeElement === first) {
+                  e.preventDefault();
+                  last?.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                  e.preventDefault();
+                  first?.focus();
+                }
+              }
+            }}
+          >
             <div className="sticky top-0 bg-[#0a0a0a] border-b border-white/5 p-5 flex items-center justify-between">
               <div>
                 <div className="mono text-xs text-[#B52A32]">{selectedTeam.registrationId}</div>
-                <h2 className="display text-xl font-bold text-white mt-1">{selectedTeam.teamName}</h2>
+                <h2 id="coordinator-team-title" className="display text-xl font-bold text-white mt-1">{selectedTeam.teamName}</h2>
                 {selectedTeam.college && <div className="text-xs text-[#A8A8A8] mt-1">{selectedTeam.college}</div>}
               </div>
-              <button onClick={() => setSelectedTeam(null)} className="text-[#A8A8A8] hover:text-white p-1">
+              <button ref={closeTeamButtonRef} onClick={() => setSelectedTeam(null)} aria-label="Close team details" className="text-[#A8A8A8] hover:text-white p-1">
                 <X size={20} />
               </button>
             </div>
@@ -161,7 +194,7 @@ export function CoordinatorPortal() {
               <div className="mono text-[10px] uppercase tracking-widest text-[#A8A8A8] mb-3">
                 Members ({selectedTeam.members.length})
               </div>
-                  <div className="space-y-3">
+              <div className="space-y-3">
                 {selectedTeam.members.map((m, i) => (
                   <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg bg-[#080808] border border-white/5">
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full mono text-xs ${
@@ -181,7 +214,7 @@ export function CoordinatorPortal() {
                       )}
                     </div>
                     {m.hasParticipantImage && (
-                      <a href={`/api/admin/participants/${m.id}/image`} download title={`Download ${m.fullName}'s participant photo`}>
+                      <a href={`/api/admin/participants/${m.id}/image`} download={m.participantImageFileName ?? undefined} title={`Download ${m.fullName}'s participant photo`}>
                         <img src={`/api/admin/participants/${m.id}/image`} alt={`${m.fullName} participant photo`} className="h-12 w-12 rounded object-cover" />
                       </a>
                     )}
@@ -223,22 +256,19 @@ export function CoordinatorPortal() {
 // ─── Meal Consumption View (read-only for coordinators) ─────────────────────
 
 function MealConsumptionView() {
-  const [activeMealId, setActiveMealId] = useState<string>("");
+  const [activeMealId, setActiveMealId] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery<{ meals: MealStat[]; totalApproved: number }>({
+  const { data, isLoading, error } = useQuery<{ meals: MealStat[]; totalApproved: number }>({
     queryKey: ["food-stats-coordinator"],
-    queryFn: async () => (await fetch("/api/food/stats")).json(),
+    queryFn: () => fetchCoordinatorData("/api/food/stats"),
     refetchInterval: 15000,
   });
   const meals = data?.meals ?? [];
 
-  if (!activeMealId && meals.length > 0) {
-    setTimeout(() => setActiveMealId(meals[0].meal.id), 0);
-  }
-
   const activeMeal = meals.find((m) => m.meal.id === activeMealId) ?? meals[0];
 
   if (isLoading) return <div className="text-[#A8A8A8] text-sm">Loading meal data…</div>;
+  if (error) return <div role="alert" className="glass rounded-lg p-6 text-sm text-[#D83A43]">{error.message}</div>;
   if (meals.length === 0) return <div className="glass rounded-lg p-8 text-center text-sm text-[#A8A8A8]">No meals configured.</div>;
 
   const pct = activeMeal?.totalApproved > 0 ? (activeMeal.eatenCount / activeMeal.totalApproved) * 100 : 0;
@@ -345,6 +375,16 @@ function MealConsumptionView() {
       )}
     </div>
   );
+}
+
+async function fetchCoordinatorData<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("Your session has expired. Please sign in again.");
+    if (response.status === 403) throw new Error("You do not have permission to view this data.");
+    throw new Error("Unable to load data. Please try again.");
+  }
+  return response.json() as Promise<T>;
 }
 
 // The authorized server export reads complete team/member/payment rows from PostgreSQL.

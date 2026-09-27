@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { UtensilsCrossed, Check, Clock, Users, ScanLine, History } from "lucide-react";
+import { fetchJson } from "@/lib/api-fetch";
 
 type MealStat = {
   meal: {
@@ -55,15 +56,21 @@ export function FoodDashboard() {
   const [activeMealId, setActiveMealId] = useState<string>("");
   const [view, setView] = useState<"consumption" | "team" | "scanner" | "history">("consumption");
 
-  const { data: statsData } = useQuery<{ meals: MealStat[]; totalApproved: number }>({
+  const { data: statsData, error: statsError } = useQuery<{ meals: MealStat[]; totalApproved: number }>({
     queryKey: ["food-stats"],
-    queryFn: async () => (await fetch("/api/food/stats")).json(),
+    queryFn: () => fetchJson("/api/food/stats"),
     refetchInterval: 10000,
   });
   const meals = statsData?.meals ?? [];
 
   // Derive the active meal — if no meal is selected, default to the first one
   const activeMeal = meals.find((m) => m.meal.id === activeMealId) ?? meals[0];
+  const tabs = [
+    { id: "consumption", label: "Consumption", icon: UtensilsCrossed },
+    { id: "team", label: "Team Status", icon: Users },
+    { id: "scanner", label: "Scanner", icon: ScanLine },
+    { id: "history", label: "History", icon: History },
+  ] as const;
 
   return (
     <div className="space-y-6">
@@ -75,19 +82,16 @@ export function FoodDashboard() {
         </p>
       </header>
 
+      {statsError && <div role="alert" className="text-sm text-[#D83A43]">{statsError.message}</div>}
+
       {/* View tabs */}
       <div className="flex gap-1 overflow-x-auto no-scrollbar">
-        {[
-          { id: "consumption", label: "Consumption", icon: UtensilsCrossed },
-          { id: "team", label: "Team Status", icon: Users },
-          { id: "scanner", label: "Scanner", icon: ScanLine },
-          { id: "history", label: "History", icon: History },
-        ].map((tab) => {
+        {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
               key={tab.id}
-              onClick={() => setView(tab.id as any)}
+              onClick={() => setView(tab.id)}
               className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition-all ${
                 view === tab.id
                   ? "bg-[#B52A32] text-white"
@@ -238,15 +242,16 @@ function ConsumptionView({
 // ─── Team Status View ─────────────────────────────────────────────────────
 
 function TeamStatusView() {
-  const { data, isLoading } = useQuery<{ teams: TeamStatus[]; meals: any[] }>({
+  const { data, isLoading, error: queryError } = useQuery<{ teams: TeamStatus[]; meals: { id: string; label: string }[] }>({
     queryKey: ["food-team-status"],
-    queryFn: async () => (await fetch("/api/food/team-status")).json(),
+    queryFn: () => fetchJson("/api/food/team-status"),
     refetchInterval: 15000,
   });
   const teams: TeamStatus[] = data?.teams ?? [];
   const meals = data?.meals ?? [];
 
   if (isLoading) return <div className="text-[#A8A8A8] text-sm">Loading…</div>;
+  if (queryError) return <div role="alert" className="text-[#D83A43] text-sm">{queryError.message}</div>;
   if (teams.length === 0) return <div className="glass rounded-lg p-6 text-center text-[#A8A8A8] text-sm">No approved teams yet.</div>;
 
   return (
@@ -323,15 +328,19 @@ function ScannerView() {
 // ─── History View ─────────────────────────────────────────────────────────
 
 function HistoryView() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error: queryError } = useQuery<{
+    checkIns: {
+      id: string;
+      createdAt: string;
+      participant: { fullName: string; team: { teamName: string } };
+      meal: { label: string };
+    }[];
+  }>({
     queryKey: ["food-check-ins-recent"],
-    queryFn: async () => {
-      const r = await fetch("/api/food/check-ins?pageSize=30");
-      return r.json();
-    },
+    queryFn: () => fetchJson("/api/food/check-ins?pageSize=30"),
     refetchInterval: 10000,
   });
-  const checkIns: any[] = data?.checkIns ?? [];
+  const checkIns = data?.checkIns ?? [];
 
   return (
     <div className="glass rounded-lg overflow-hidden">
@@ -340,6 +349,8 @@ function HistoryView() {
       </div>
       {isLoading ? (
         <div className="p-6 text-sm text-[#A8A8A8]">Loading…</div>
+      ) : queryError ? (
+        <div role="alert" className="p-6 text-sm text-[#D83A43]">{queryError.message}</div>
       ) : checkIns.length === 0 ? (
         <div className="p-6 text-center text-sm text-[#A8A8A8]">No check-ins yet.</div>
       ) : (

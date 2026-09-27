@@ -16,7 +16,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ qrToken
     }
     const participant = await db.participant.findUnique({
       where: { qrToken },
-      include: { team: true },
+      select: {
+        id: true,
+        fullName: true,
+        participantId: true,
+        passVerified: true,
+        team: { select: { teamName: true, registrationId: true, status: true } },
+      },
     });
     if (!participant) {
       return NextResponse.json({ error: "Pass not found" }, { status: 404 });

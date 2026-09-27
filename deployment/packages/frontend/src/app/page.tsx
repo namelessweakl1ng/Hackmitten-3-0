@@ -10,6 +10,7 @@ import { Coordinators } from "@/components/sections/coordinators";
 import { Sponsors } from "@/components/sections/sponsors";
 import { Venue } from "@/components/sections/venue";
 import { CTA } from "@/components/sections/cta";
+import { Footer } from "@/components/sections/footer";
 import { Reveal } from "@/components/ui/reveal";
 
 // Black hole 3D scene — loaded client-side only, with SSR disabled
@@ -22,7 +23,7 @@ export default function HomePage() {
   const { scrollProgress } = useScrollProgress();
 
   return (
-    <main className="relative min-h-screen bg-[#030303] text-white overflow-x-hidden">
+    <div className="relative min-h-screen overflow-x-hidden bg-[#030303] text-white">
       {/* Cinematic 3D background — fixed, behind all content */}
       <div className="fixed inset-0 z-0 pointer-events-none">
         <SpaceScene scrollProgress={scrollProgress} />
@@ -39,14 +40,17 @@ export default function HomePage() {
 
       <div className="relative z-10">
         <PublicNav />
-        <Hero />
-        <Reveal><About /></Reveal>
-        <Reveal delay={80}><Gallery /></Reveal>
-        <Reveal delay={100}><Coordinators /></Reveal>
-        <Reveal delay={80}><Sponsors /></Reveal>
-        <Reveal delay={60}><Venue /></Reveal>
-        <Reveal delay={100}><CTA /></Reveal>
+        <main>
+          <Hero />
+          <Reveal><About /></Reveal>
+          <Reveal delay={80}><Gallery /></Reveal>
+          <Reveal delay={100}><Coordinators /></Reveal>
+          <Reveal delay={80}><Sponsors /></Reveal>
+          <Reveal delay={60}><Venue /></Reveal>
+          <Reveal delay={100}><CTA /></Reveal>
+        </main>
+        <Footer />
       </div>
-    </main>
+    </div>
   );
 }

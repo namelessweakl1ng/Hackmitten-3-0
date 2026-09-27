@@ -21,36 +21,43 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const mealId = url.searchParams.get("mealId");
 
-    // Get all approved participants (the universe of people who can eat)
-    const approvedParticipants = await db.participant.findMany({
-      where: { passVerified: true, team: { status: "APPROVED" } },
-      select: {
-        id: true,
-        fullName: true,
-        participantId: true,
-        teamId: true,
-        team: { select: { teamName: true, registrationId: true } },
-      },
-      orderBy: { fullName: "asc" },
-    });
-
+    // Fetch the approved population and configured meals once.
+    const [approvedParticipants, meals] = await Promise.all([
+      db.participant.findMany({
+        where: { passVerified: true, team: { status: "APPROVED" } },
+        select: {
+          id: true,
+          fullName: true,
+          participantId: true,
+          team: { select: { teamName: true, registrationId: true } },
+        },
+        orderBy: { fullName: "asc" },
+      }),
+      db.meal.findMany({
+        where: mealId ? { id: mealId } : { enabled: true },
+        select: {
+          id: true,
+          type: true,
+          label: true,
+          date: true,
+          startTime: true,
+          endTime: true,
+          enabled: true,
+        },
+        orderBy: [{ type: "asc" }, { label: "asc" }],
+      }),
+    ]);
     const totalApproved = approvedParticipants.length;
-
-    // Get all enabled meals
-    const meals = await db.meal.findMany({
-      where: mealId ? { id: mealId } : { enabled: true },
-      orderBy: [{ type: "asc" }, { label: "asc" }],
-    });
-
-    // For each meal, compute eaten / not-eaten
-    const mealStats = await Promise.all(
-      meals.map(async (meal) => {
-        const checkIns = await db.foodCheckIn.findMany({
-          where: { mealId: meal.id },
-          include: {
+    const approvedIds = new Set(approvedParticipants.map((participant) => participant.id));
+    const allCheckIns = meals.length
+      ? await db.foodCheckIn.findMany({
+          where: { mealId: { in: meals.map((meal) => meal.id) } },
+          select: {
+            mealId: true,
+            participantId: true,
+            createdAt: true,
             participant: {
               select: {
-                id: true,
                 fullName: true,
                 participantId: true,
                 team: { select: { teamName: true, registrationId: true } },
@@ -58,43 +65,42 @@ export async function GET(req: Request) {
             },
           },
           orderBy: { createdAt: "asc" },
-        });
+        })
+      : [];
+    const checkInsByMeal = new Map(meals.map((meal) => [meal.id, [] as typeof allCheckIns]));
+    for (const checkIn of allCheckIns) {
+      if (approvedIds.has(checkIn.participantId)) {
+        checkInsByMeal.get(checkIn.mealId)?.push(checkIn);
+      }
+    }
 
-        const eatenIds = new Set(checkIns.map((c) => c.participantId));
-        const eaten = checkIns.map((c) => ({
-          participantId: c.participant.participantId,
-          fullName: c.participant.fullName,
-          teamName: c.participant.team.teamName,
-          registrationId: c.participant.team.registrationId,
-          checkedInAt: c.createdAt.toISOString(),
+    const mealStats = meals.map((meal) => {
+      const checkIns = checkInsByMeal.get(meal.id) ?? [];
+      const eatenIds = new Set(checkIns.map((checkIn) => checkIn.participantId));
+      const eaten = checkIns.map((checkIn) => ({
+        participantId: checkIn.participant.participantId,
+        fullName: checkIn.participant.fullName,
+        teamName: checkIn.participant.team.teamName,
+        registrationId: checkIn.participant.team.registrationId,
+        checkedInAt: checkIn.createdAt.toISOString(),
+      }));
+      const notEaten = approvedParticipants
+        .filter((participant) => !eatenIds.has(participant.id))
+        .map((participant) => ({
+          participantId: participant.participantId,
+          fullName: participant.fullName,
+          teamName: participant.team.teamName,
+          registrationId: participant.team.registrationId,
         }));
-        const notEaten = approvedParticipants
-          .filter((p) => !eatenIds.has(p.id))
-          .map((p) => ({
-            participantId: p.participantId,
-            fullName: p.fullName,
-            teamName: p.team.teamName,
-            registrationId: p.team.registrationId,
-          }));
-
-        return {
-          meal: {
-            id: meal.id,
-            type: meal.type,
-            label: meal.label,
-            date: meal.date,
-            startTime: meal.startTime,
-            endTime: meal.endTime,
-            enabled: meal.enabled,
-          },
-          totalApproved,
-          eatenCount: eaten.length,
-          notEatenCount: notEaten.length,
-          eaten,
-          notEaten,
-        };
-      }),
-    );
+      return {
+        meal,
+        totalApproved,
+        eatenCount: eaten.length,
+        notEatenCount: notEaten.length,
+        eaten,
+        notEaten,
+      };
+    });
 
     return NextResponse.json({ meals: mealStats, totalApproved });
   } catch (err) {

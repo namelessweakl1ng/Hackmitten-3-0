@@ -13,6 +13,24 @@ export const SPONSORS: StaticSponsor[] = [
     website: null,
     tier: "TITLE",
   },
+  {
+    name: "SUCE-STEP",
+    logo: "/images/sponsors/logo1.png",
+    website: null,
+    tier: "PARTNER",
+  },
+  {
+    name: "CYNEFIAN Pvt. Ltd.",
+    logo: "/images/sponsors/logo2.png",
+    website: null,
+    tier: "PARTNER",
+  },
+  {
+    name: "1by0grit.com",
+    logo: "/images/sponsors/logo3.png",
+    website: null,
+    tier: "PARTNER",
+  },
   // CSE
   {
     name: "CSE",

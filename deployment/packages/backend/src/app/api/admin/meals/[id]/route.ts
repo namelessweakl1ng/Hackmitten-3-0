@@ -1,29 +1,19 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission, jsonError } from "@/lib/api-auth";
 import { mealSchema } from "@/lib/validators";
-import { recordChange, snapshotRow } from "@/lib/change-history";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const ctx = await requirePermission("food:manage");
+    await requirePermission("food:manage");
     const { id } = await params;
     const body = await req.json();
     const parsed = mealSchema.partial().safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid input", issues: parsed.error.issues }, { status: 400 });
     }
-    const previous = await db.meal.findUnique({ where: { id } });
     const meal = await db.meal.update({ where: { id }, data: parsed.data });
-    await recordChange({
-      section: "MEAL",
-      entityId: id,
-      entityType: "Meal",
-      action: "UPDATE",
-      previousState: previous ? snapshotRow(previous) : null,
-      newState: snapshotRow(meal),
-      changedById: ctx.userId,
-    });
     return NextResponse.json({ meal });
   } catch (err) {
     return jsonError(err);
@@ -32,21 +22,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const ctx = await requirePermission("food:manage");
+    await requirePermission("food:manage");
     const { id } = await params;
-    const previous = await db.meal.findUnique({ where: { id } });
     await db.meal.delete({ where: { id } });
-    await recordChange({
-      section: "MEAL",
-      entityId: id,
-      entityType: "Meal",
-      action: "DELETE",
-      previousState: previous ? snapshotRow(previous) : null,
-      newState: null,
-      changedById: ctx.userId,
-    });
     return NextResponse.json({ success: true });
   } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+      return NextResponse.json(
+        { error: "This meal has check-ins and cannot be deleted. Disable it instead." },
+        { status: 409 },
+      );
+    }
     return jsonError(err);
   }
 }

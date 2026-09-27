@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { fetchJson } from "@/lib/api-fetch";
 
 type Team = {
   id: string;
@@ -50,7 +51,10 @@ export function AdminRegistrationsList() {
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error: queryError } = useQuery<{
+    teams: Team[];
+    pagination: { page: number; pageSize: number; total: number; totalPages: number };
+  }>({
     queryKey: ["admin-registrations", q, status, paymentStatus, page],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -59,8 +63,7 @@ export function AdminRegistrationsList() {
       if (paymentStatus) params.set("paymentStatus", paymentStatus);
       params.set("page", String(page));
       params.set("pageSize", String(pageSize));
-      const r = await fetch(`/api/admin/registrations?${params.toString()}`);
-      return r.json();
+      return fetchJson(`/api/admin/registrations?${params.toString()}`);
     },
     refetchInterval: 20000,
   });
@@ -132,6 +135,8 @@ export function AdminRegistrationsList() {
             <tbody className="divide-y divide-white/5">
               {isLoading ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-[#A8A8A8]">Loading…</td></tr>
+              ) : queryError ? (
+                <tr><td colSpan={6} role="alert" className="px-4 py-8 text-center text-[#D83A43]">{queryError.message}</td></tr>
               ) : teams.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-[#A8A8A8]">No teams match.</td></tr>
               ) : (

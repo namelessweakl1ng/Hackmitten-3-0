@@ -48,9 +48,15 @@ export async function GET() {
       db.team.findMany({
         take: 8,
         orderBy: { createdAt: "desc" },
-        include: {
-          members: { select: { id: true, fullName: true } },
-          payment: { select: { status: true, transactionId: true } },
+        select: {
+          id: true,
+          teamName: true,
+          registrationId: true,
+          status: true,
+          college: true,
+          createdAt: true,
+          members: { select: { id: true } },
+          payment: { select: { status: true } },
         },
       }),
     ]);

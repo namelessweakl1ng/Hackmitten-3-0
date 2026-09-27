@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requirePermission, jsonError } from "@/lib/api-auth";
+import { participantImageFilename } from "@/lib/participant-image-filename";
 
 /**
  * GET /api/coordinator/teams
  * Returns ONLY approved teams — for the coordinator portal.
  *
- * Privacy: returns Team ID + Team Name + College + Members (name + participantId only).
- * Does NOT expose: payment screenshots, transaction IDs, emails, phones, or any super-admin-only data.
+ * Returns coordinator display fields, QR tokens, and a safe image download filename.
+ * Does not expose private image paths, payment details, emails, or phone numbers.
  */
 export async function GET() {
   try {
@@ -31,6 +32,7 @@ export async function GET() {
             college: true,
             degree: true,
             participantImagePath: true,
+            participantImageMimeType: true,
           },
           orderBy: { isLeader: "desc" },
         },
@@ -39,10 +41,16 @@ export async function GET() {
     });
     return NextResponse.json({ teams: teams.map((team) => ({
       ...team,
-      members: team.members.map(({ participantImagePath, ...member }) => ({
-        ...member,
-        hasParticipantImage: Boolean(participantImagePath),
-      })),
+      members: team.members.map(({ participantImagePath, participantImageMimeType, ...member }) => {
+        const participantImageFileName = participantImagePath
+          ? participantImageFilename(member.fullName, participantImageMimeType)
+          : null;
+        return {
+          ...member,
+          hasParticipantImage: Boolean(participantImageFileName),
+          participantImageFileName,
+        };
+      }),
     })) });
   } catch (err) {
     return jsonError(err);

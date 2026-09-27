@@ -7,7 +7,7 @@ export async function GET() {
   try {
     await requirePermission("dashboard:view");
     const teams = await db.team.findMany({
-      orderBy: [{ registrationId: "asc" }, { createdAt: "asc" }],
+      orderBy: [{ registrationId: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       select: {
         teamName: true,
         registrationId: true,
@@ -15,7 +15,7 @@ export async function GET() {
         payment: { select: { status: true, transactionId: true } },
         members: {
           select: { fullName: true, email: true, phone: true, college: true, degree: true, participantId: true, isLeader: true },
-          orderBy: { isLeader: "desc" },
+          orderBy: [{ isLeader: "desc" }, { createdAt: "asc" }, { id: "asc" }],
         },
       },
     });

@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Users, CheckCircle2, Clock, ShieldCheck, UtensilsCrossed, Download } from "lucide-react";
 import Link from "next/link";
+import { fetchJson } from "@/lib/api-fetch";
 
 type Stats = {
   counts: {
@@ -15,8 +16,20 @@ type Stats = {
     totalFoodCheckIns: number;
   };
   meals: { id: string; type: string; label: string; checkInCount: number }[];
-  recentCheckIns: any[];
-  recentRegistrations: any[];
+  recentCheckIns: {
+    id: string;
+    createdAt: string;
+    participant: { fullName: string; team: { teamName: string } };
+    meal: { label: string };
+  }[];
+  recentRegistrations: {
+    id: string;
+    teamName: string;
+    status: string;
+    college: string | null;
+    members: { id: string }[];
+    payment: { status: string } | null;
+  }[];
 };
 
 const STAT_CARDS = [
@@ -40,9 +53,9 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function AdminDashboardHome() {
-  const { data, isLoading } = useQuery<Stats>({
+  const { data, isLoading, error: queryError } = useQuery<Stats>({
     queryKey: ["admin-stats"],
-    queryFn: async () => (await fetch("/api/admin/stats")).json(),
+    queryFn: () => fetchJson("/api/admin/stats"),
     refetchInterval: 15000,
   });
 
@@ -64,6 +77,8 @@ export function AdminDashboardHome() {
         </a>
       </header>
 
+      {queryError && <div role="alert" className="glass rounded p-3 text-sm text-[#D83A43] border-l-2 border-[#B52A32]">{queryError.message}</div>}
+
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
         {STAT_CARDS.map((card) => {
@@ -72,7 +87,7 @@ export function AdminDashboardHome() {
             <div key={card.key} className="glass rounded-lg p-4">
               <Icon size={16} className="text-[#A8A8A8] mb-3" />
               <div className="display text-2xl md:text-3xl font-bold text-white">
-                {isLoading ? "—" : data?.counts[card.key as keyof typeof data.counts] ?? 0}
+                {isLoading || queryError ? "—" : data?.counts[card.key] ?? 0}
               </div>
               <div className="mono text-[9px] uppercase tracking-widest text-[#A8A8A8] mt-1">
                 {card.label}
@@ -97,7 +112,7 @@ export function AdminDashboardHome() {
             ) : data?.recentRegistrations?.length === 0 ? (
               <div className="p-6 text-sm text-[#A8A8A8]">No registrations yet.</div>
             ) : (
-              data?.recentRegistrations?.map((t: any) => (
+              data?.recentRegistrations?.map((t) => (
                 <Link
                   key={t.id}
                   href={`/admin/registrations/${t.id}`}
@@ -162,7 +177,7 @@ export function AdminDashboardHome() {
           ) : data?.recentCheckIns?.length === 0 ? (
             <div className="p-6 text-sm text-[#A8A8A8]">No check-ins yet.</div>
           ) : (
-            data?.recentCheckIns?.map((c: any) => (
+            data?.recentCheckIns?.map((c) => (
               <div key={c.id} className="flex items-center gap-4 p-4">
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-white truncate">{c.participant.fullName}</div>
