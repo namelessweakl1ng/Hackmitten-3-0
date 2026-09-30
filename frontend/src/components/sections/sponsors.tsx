@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { resolveSponsors } from "@/data/sponsors";
 
 type Sponsor = ReturnType<typeof resolveSponsors>[number];
@@ -80,45 +81,11 @@ export function Sponsors() {
               <span className="mono whitespace-nowrap text-[10px] uppercase tracking-widest text-[#A8A8A8]">
                 SPONSORS
               </span>
-
               <div className="h-px flex-1 bg-white/10" />
             </div>
 
-            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] items-center gap-4 md:gap-6">
+            <SponsorGlobe sponsors={sponsorLogos} />
 
-              {sponsorLogos.map((sponsor) => (
-                <div
-                  key={sponsor.id}
-                  className="
-                    flex
-                    h-28
-                    min-w-0
-                    items-center
-                    justify-center
-                    md:h-36
-                  "
-                >
-                  {sponsor.logoUrl ? (
-                    <img
-                      src={sponsor.logoUrl}
-                      alt={`${sponsor.name} logo`}
-                      loading="lazy"
-                      className="
-                        block
-                        max-h-full
-                        max-w-full
-                        object-contain
-                      "
-                    />
-                  ) : (
-                    <span className="text-center text-sm font-bold text-[#A8A8A8]/50 md:text-lg">
-                      {sponsor.name}
-                    </span>
-                  )}
-                </div>
-              ))}
-
-            </div>
           </div>
         )}
 
@@ -211,5 +178,166 @@ export function Sponsors() {
 
       </div>
     </section>
+  );
+}
+
+/* ================================================================
+   SPONSOR GLOBE  –  logos fixed on a 3-D rotating sphere
+================================================================ */
+
+function SponsorGlobe({ sponsors }: { sponsors: Sponsor[] }) {
+  const rafRef = useRef<number>(0);
+  const yawRef = useRef(0);          // auto-rotation angle (radians)
+  const dragRef = useRef<{ active: boolean; lastX: number; lastY: number }>({
+    active: false, lastX: 0, lastY: 0,
+  });
+  const pitchRef = useRef(0.35);     // tilt (radians) – fixed slight tilt
+  const manualYawRef = useRef(0);    // extra yaw from drag
+  const [, forceRender] = useState(0);
+
+  const R = 180; // sphere radius in px
+  const n = sponsors.length;
+
+  // Distribute logos evenly on sphere surface using golden-angle spiral
+  const positions = sponsors.map((_, i) => {
+    const phi = Math.acos(1 - (2 * (i + 0.5)) / n);   // polar
+    const theta = Math.PI * (1 + Math.sqrt(5)) * i;    // azimuthal
+    return { phi, theta };
+  });
+
+  useEffect(() => {
+    let last = performance.now();
+    function tick(now: number) {
+      const dt = (now - last) / 1000;
+      last = now;
+      if (!dragRef.current.active) yawRef.current += dt * 0.4;
+      forceRender((v) => v + 1);
+      rafRef.current = requestAnimationFrame(tick);
+    }
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  function onPointerDown(e: React.PointerEvent) {
+    dragRef.current = { active: true, lastX: e.clientX, lastY: e.clientY };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    if (!dragRef.current.active) return;
+    const dx = e.clientX - dragRef.current.lastX;
+    dragRef.current.lastX = e.clientX;
+    dragRef.current.lastY = e.clientY;
+    yawRef.current += dx * 0.008;
+  }
+  function onPointerUp() { dragRef.current.active = false; }
+
+  const totalYaw = yawRef.current + manualYawRef.current;
+  const pitch = pitchRef.current;
+
+  // Project 3-D point onto 2-D canvas
+  function project(phi: number, theta: number) {
+    const x0 = R * Math.sin(phi) * Math.cos(theta);
+    const y0 = R * Math.cos(phi);
+    const z0 = R * Math.sin(phi) * Math.sin(theta);
+
+    // rotate around Y axis (yaw)
+    const x1 = x0 * Math.cos(totalYaw) + z0 * Math.sin(totalYaw);
+    const z1 = -x0 * Math.sin(totalYaw) + z0 * Math.cos(totalYaw);
+
+    // rotate around X axis (pitch)
+    const y2 = y0 * Math.cos(pitch) - z1 * Math.sin(pitch);
+    const z2 = y0 * Math.sin(pitch) + z1 * Math.cos(pitch);
+
+    const scale = (z2 + R * 2) / (R * 3); // perspective scale
+    return { sx: x1 * scale, sy: y2 * scale, scale, z: z2 };
+  }
+
+  const projected = positions.map(({ phi, theta }, i) => ({
+    ...project(phi, theta),
+    sponsor: sponsors[i],
+  }));
+
+  // Sort back-to-front so front logos render on top
+  projected.sort((a, b) => a.z - b.z);
+
+  const SIZE = R * 2 + 160; // canvas size
+
+  return (
+    <div className="flex justify-center">
+      <div
+        className="relative cursor-grab select-none active:cursor-grabbing"
+        style={{ width: SIZE, height: SIZE, maxWidth: "100%" }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerLeave={onPointerUp}
+      >
+        {/* Globe wireframe rings */}
+        <svg
+          className="pointer-events-none absolute inset-0"
+          width={SIZE}
+          height={SIZE}
+          viewBox={`0 0 ${SIZE} ${SIZE}`}
+        >
+          <defs>
+            <radialGradient id="globeGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#B52A32" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="#B52A32" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <circle cx={SIZE / 2} cy={SIZE / 2} r={R} fill="url(#globeGlow)" />
+          <circle cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none" stroke="#B52A32" strokeOpacity="0.15" strokeWidth="1" />
+          {/* latitude rings */}
+          {[-0.6, -0.3, 0, 0.3, 0.6].map((t, i) => {
+            const ry = R * Math.sqrt(1 - t * t);
+            const cy = SIZE / 2 + R * t;
+            return <ellipse key={i} cx={SIZE / 2} cy={cy} rx={ry} ry={ry * 0.28} fill="none" stroke="#ffffff" strokeOpacity="0.05" strokeWidth="1" />;
+          })}
+          {/* longitude arcs */}
+          {[0, 60, 120].map((deg, i) => (
+            <ellipse key={i} cx={SIZE / 2} cy={SIZE / 2} rx={R * Math.abs(Math.cos((deg * Math.PI) / 180))} ry={R} fill="none" stroke="#ffffff" strokeOpacity="0.05" strokeWidth="1" />
+          ))}
+        </svg>
+
+        {/* Logo nodes */}
+        {projected.map(({ sx, sy, scale, sponsor }) => {
+          const logoSize = Math.max(52, 110 * scale);
+          const opacity = Math.max(0.25, scale);
+          return (
+            <div
+              key={sponsor.id}
+              className="absolute flex items-center justify-center rounded-full bg-white/90 shadow-md"
+              style={{
+                width: logoSize,
+                height: logoSize,
+                left: SIZE / 2 + sx - logoSize / 2,
+                top: SIZE / 2 + sy - logoSize / 2,
+                opacity,
+                zIndex: Math.round(scale * 100),
+              }}
+            >
+              {sponsor.logoUrl ? (
+                <img
+                  src={sponsor.logoUrl}
+                  alt={sponsor.name}
+                  loading="lazy"
+                  draggable={false}
+                  className="h-[80%] w-[80%] object-contain"
+                />
+              ) : (
+                <span className="text-center text-[8px] font-bold text-black leading-tight px-1">
+                  {sponsor.name}
+                </span>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Drag hint */}
+        <p className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 mono text-[9px] uppercase tracking-widest text-[#A8A8A8]/50">
+          drag to rotate
+        </p>
+      </div>
+    </div>
   );
 }
