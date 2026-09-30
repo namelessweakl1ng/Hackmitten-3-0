@@ -34,6 +34,14 @@ export const DEVELOPING_TEAM: DevelopingTeamMember[] = [
     github: "https://github.com/sharath-6363",
   },
   {
+    id: "developer-6",
+    name: "Manju C G",
+    role: "Tech Coordinator",
+    image: "/images/developers/manju-c-g.jpeg",
+    linkedin: "https://www.linkedin.com/in/manju-c-g-48bb23335",
+    github: "https://github.com/manjucg39-design",
+  },
+  {
     id: "developer-5",
     name: "Jasim Hussain",
     role: "Developer",
