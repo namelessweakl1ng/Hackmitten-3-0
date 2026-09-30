@@ -97,17 +97,6 @@ async function main() {
   }
   console.log(`  ✓ ${meals.length} default meals (Breakfast, Lunch, Snacks, Dinner)`);
 
-  const sponsors = [
-    { id: "sponsor_vigyanlabs", name: "VigyanLabs", logoUrl: "/images/sponsors/Vlabs.jpeg", tier: "TITLE", sortOrder: 0 },
-    { id: "sponsor_suce_step", name: "SUCE-STEP", logoUrl: "/images/sponsors/logo1.png", tier: "PARTNER", sortOrder: 1 },
-    { id: "sponsor_cynefian", name: "CYNEFIAN Pvt. Ltd.", logoUrl: "/images/sponsors/logo2.png", tier: "PARTNER", sortOrder: 2 },
-    { id: "sponsor_1by0grit", name: "1by0grit.com", logoUrl: "/images/sponsors/logo3.png", tier: "PARTNER", sortOrder: 3 },
-  ];
-  for (const sponsor of sponsors) {
-    await db.sponsor.upsert({ where: { id: sponsor.id }, update: {}, create: sponsor });
-  }
-  console.log(`  ✓ ${sponsors.length} sponsors`);
-
   console.log("\n✅ Bootstrap seed complete.");
   console.log("  Login at /login with the super admin credentials you configured.");
 }

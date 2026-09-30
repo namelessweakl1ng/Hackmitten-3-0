@@ -33,14 +33,19 @@ export async function POST(request: Request) {
         normalizedWebsite = url.toString();
       } catch { return NextResponse.json({ error: "Website URL must be a valid HTTP or HTTPS URL." }, { status: 400 }); }
     }
-    const next = await db.sponsor.aggregate({ _max: { sortOrder: true } });
     const stored = await storeImage({ file: logo, prefix: "sponsor" });
     try {
-      const sponsor = await db.sponsor.create({ data: {
-        name, websiteUrl: normalizedWebsite, tier,
-        customTier: tier === "CUSTOM" ? customTier || null : null,
-        logoUrl: stored.relativePath, sortOrder: (next._max.sortOrder ?? -1) + 1,
-      } });
+      const sponsor = await db.$transaction(async (tx) => {
+        // Serialize the small max-plus-one section so simultaneous uploads
+        // cannot receive the same position.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('sponsor-sort-order'))`;
+        const next = await tx.sponsor.aggregate({ _max: { sortOrder: true } });
+        return tx.sponsor.create({ data: {
+          name, websiteUrl: normalizedWebsite, tier,
+          customTier: tier === "CUSTOM" ? customTier || null : null,
+          logoUrl: stored.relativePath, sortOrder: (next._max.sortOrder ?? -1) + 1,
+        } });
+      });
       return NextResponse.json({ sponsor }, { status: 201 });
     } catch (error) {
       // Preserve the database error even if best-effort orphan cleanup fails.

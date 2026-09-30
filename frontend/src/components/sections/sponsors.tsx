@@ -1,16 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { resolveSponsors } from "@/data/sponsors";
 
 type Sponsor = { id: string; name: string; logoUrl: string; websiteUrl: string | null; tier: string; customTier: string | null; sortOrder: number };
 
-const DEPARTMENTS: Sponsor[] = [
-  { id: "department-cse", name: "CSE", logoUrl: "/images/sponsors/cse.png", websiteUrl: null, tier: "CUSTOM", customTier: "Departments", sortOrder: 0 },
-  { id: "department-aiml", name: "AI&ML", logoUrl: "/images/sponsors/aiml.png", websiteUrl: null, tier: "CUSTOM", customTier: "Departments", sortOrder: 1 },
-];
-
 export function Sponsors() {
-  const [sponsors, setSponsors] = useState<Sponsor[]>([]);
+  const permanentSponsors = resolveSponsors();
+  const [additionalSponsors, setAdditionalSponsors] = useState<Sponsor[]>([]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -19,7 +16,7 @@ export function Sponsors() {
         if (!response.ok) throw new Error("Unable to load sponsors");
         return response.json() as Promise<{ sponsors: Sponsor[] }>;
       })
-      .then((result) => setSponsors(result.sponsors))
+      .then((result) => setAdditionalSponsors(result.sponsors))
       .catch((error) => { if (error instanceof Error && error.name !== "AbortError") console.error("Unable to load sponsors"); });
     return () => controller.abort();
   }, []);
@@ -28,9 +25,20 @@ export function Sponsors() {
      SEPARATE SPONSORS AND DEPARTMENTS
      ================================ */
 
-  const sponsorLogos = sponsors;
+  const permanentNames = new Set(permanentSponsors.map((sponsor) => sponsor.name.trim().toLowerCase()));
+  const seenNames = new Set(permanentNames);
+  const uniqueAdditionalSponsors = additionalSponsors.filter((sponsor) => {
+    const normalizedName = sponsor.name.trim().toLowerCase();
+    if (seenNames.has(normalizedName)) return false;
+    seenNames.add(normalizedName);
+    return true;
+  });
+  const sponsorLogos = [
+    ...permanentSponsors.filter((sponsor) => sponsor.tier !== "CUSTOM"),
+    ...uniqueAdditionalSponsors,
+  ];
 
-  const departmentLogos = DEPARTMENTS;
+  const departmentLogos = permanentSponsors.filter((sponsor) => sponsor.tier === "CUSTOM");
 
   /* ================================
      DEPARTMENT LOGO FALLBACK
