@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Html5Qrcode } from "html5-qrcode";
 import { ScanLine, CheckCircle2, XCircle, AlertCircle, LogOut, History, X, UtensilsCrossed } from "lucide-react";
@@ -18,14 +18,44 @@ type ScanResult = {
   previousCheckInAt?: string | null;
 };
 
+type CameraState =
+  | "idle"
+  | "requesting"
+  | "scanning"
+  | "permission-denied"
+  | "no-camera"
+  | "insecure"
+  | "error";
+
+function classifyCameraError(error: unknown): Exclude<CameraState, "idle" | "requesting" | "scanning"> {
+  const name = error instanceof DOMException ? error.name : "";
+  const message = String(error instanceof Error ? error.message : error).toLowerCase();
+
+  if (name === "NotAllowedError" || name === "PermissionDeniedError" || message.includes("permission")) {
+    return "permission-denied";
+  }
+  if (
+    name === "NotFoundError"
+    || name === "DevicesNotFoundError"
+    || message.includes("no camera")
+    || message.includes("not found")
+  ) {
+    return "no-camera";
+  }
+  return "error";
+}
+
 export function FoodScannerApp() {
   const [mealId, setMealId] = useState<string>("");
-  const [scanning, setScanning] = useState(false);
+  const [cameraState, setCameraState] = useState<CameraState>("idle");
   const [result, setResult] = useState<ScanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [manualToken, setManualToken] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const startAttemptRef = useRef(0);
+  const startingRef = useRef(false);
+  const mountedRef = useRef(true);
   const containerId = "qr-reader";
   const qc = useQueryClient();
 
@@ -72,50 +102,104 @@ export function FoodScannerApp() {
     }
   };
 
-  const startScanner = async () => {
-    setError(null);
-    setResult(null);
-    setScanning(true);
-    // Wait for next tick so the container div is rendered
-    setTimeout(async () => {
-      try {
-        const scanner = new Html5Qrcode(containerId, { verbose: false });
-        scannerRef.current = scanner;
-        await scanner.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 240, height: 240 } },
-          (decodedText) => {
-            // Stop and submit
-            stopScanner();
-            performCheckIn(decodedText);
-          },
-          () => {},
-        );
-      } catch {
-        setError(
-          "Could not start camera. Allow camera permission, or paste the QR token manually below.",
-        );
-        setScanning(false);
-      }
-    }, 100);
-  };
-
-  const stopScanner = async () => {
+  const releaseScanner = useCallback(async (updateState = true) => {
+    startAttemptRef.current += 1;
+    startingRef.current = false;
     const scanner = scannerRef.current;
+    scannerRef.current = null;
+
     if (scanner) {
       try {
-        await scanner.stop();
-        await scanner.clear();
-      } catch { /* ignore */ }
-      scannerRef.current = null;
+        if (scanner.isScanning) await scanner.stop();
+      } catch { /* The camera may already have stopped. */ }
+      try {
+        scanner.clear();
+      } catch { /* The reader may already have been removed. */ }
     }
-    setScanning(false);
+    if (updateState && mountedRef.current) setCameraState("idle");
+  }, []);
+
+  const startScanner = async () => {
+    if (startingRef.current || scannerRef.current) return;
+    setError(null);
+    setResult(null);
+    if (!window.isSecureContext) {
+      setCameraState("insecure");
+      return;
+    }
+
+    startingRef.current = true;
+    const attempt = ++startAttemptRef.current;
+    setCameraState("requesting");
+
+    // Querying permission does not prompt. If unsupported, start normally and
+    // let getUserMedia (via html5-qrcode) report the real browser result.
+    if (navigator.permissions?.query) {
+      try {
+        const permission = await navigator.permissions.query({ name: "camera" as PermissionName });
+        if (attempt !== startAttemptRef.current) return;
+        if (permission.state === "denied") {
+          startingRef.current = false;
+          setCameraState("permission-denied");
+          return;
+        }
+      } catch { /* Camera permission querying is not supported by every browser. */ }
+    }
+
+    // Let React render the reader before html5-qrcode looks it up.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    if (attempt !== startAttemptRef.current || !mountedRef.current) return;
+
+    const scanner = new Html5Qrcode(containerId, { verbose: false });
+    scannerRef.current = scanner;
+    try {
+      await scanner.start(
+        { facingMode: { ideal: "environment" } },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
+        async (decodedText) => {
+          if (scannerRef.current !== scanner) return;
+          await releaseScanner(false);
+          if (mountedRef.current) {
+            setCameraState("idle");
+            void performCheckIn(decodedText);
+          }
+        },
+        () => {},
+      );
+      if (attempt !== startAttemptRef.current || !mountedRef.current) {
+        if (scanner.isScanning) await scanner.stop();
+        scanner.clear();
+        return;
+      }
+      startingRef.current = false;
+      setCameraState("scanning");
+    } catch (cameraError) {
+      if (scannerRef.current === scanner) scannerRef.current = null;
+      try { scanner.clear(); } catch { /* Reader startup may not have completed. */ }
+      if (attempt === startAttemptRef.current && mountedRef.current) {
+        startingRef.current = false;
+        setCameraState(classifyCameraError(cameraError));
+      }
+    }
   };
 
   useEffect(() => {
-    return () => { stopScanner(); };
-     
-  }, []);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      void releaseScanner(false);
+    };
+  }, [releaseScanner]);
+
+  const cameraMessage = {
+    idle: "Camera not started. Camera access is requested only when you tap Start Camera.",
+    requesting: "Requesting camera permission… Approve the browser prompt to begin scanning.",
+    scanning: "Camera active — point it at a participant QR code.",
+    "permission-denied": "Camera permission was denied. Enable camera access for this site in your browser or site settings, then tap Retry.",
+    "no-camera": "No camera is available on this device. You can enter the QR token manually below.",
+    insecure: "Camera access requires HTTPS or localhost. Open this page over a secure connection, or enter the token manually.",
+    error: "The camera could not be started. Close other apps using it, check browser settings, and try again.",
+  }[cameraState];
 
   return (
     <main className="min-h-screen bg-[#030303] text-white">
@@ -182,11 +266,14 @@ export function FoodScannerApp() {
         {/* Scanner / Result */}
         {!result && (
           <div className="flex-1 flex flex-col">
-            {scanning ? (
+            {cameraState === "requesting" || cameraState === "scanning" ? (
               <div className="glass rounded-lg p-4">
                 <div id={containerId} className="w-full aspect-square rounded-md overflow-hidden bg-black" />
+                <div className="mt-3 text-center text-xs text-[#A8A8A8]" role="status">
+                  {cameraMessage}
+                </div>
                 <button
-                  onClick={stopScanner}
+                  onClick={() => void releaseScanner()}
                   className="mt-4 w-full rounded-full border border-white/15 px-5 py-3 text-sm text-white hover:bg-white/5"
                 >
                   Cancel
@@ -202,18 +289,23 @@ export function FoodScannerApp() {
                   <ScanLine size={28} className="text-[#B52A32]" />
                 </div>
                 <div className="text-center">
-                  <div className="display text-xl font-bold text-white">Tap to Scan</div>
+                  <div className="display text-xl font-bold text-white">
+                    {cameraState === "permission-denied" ? "Camera Permission Denied" : "Start Camera"}
+                  </div>
                   <div className="text-xs text-[#A8A8A8] mt-1">
-                    {meals.find((m) => m.id === mealId)?.label ?? "Select meal"} check-in
+                    {cameraMessage}
+                  </div>
+                  <div className="mono text-[10px] uppercase tracking-widest text-[#B52A32] mt-4">
+                    {cameraState === "permission-denied" ? "Retry" : "Tap to scan"}
                   </div>
                 </div>
               </button>
             )}
 
-            {error && (
+            {(error || ["permission-denied", "no-camera", "insecure", "error"].includes(cameraState)) && (
               <div className="mt-4 glass rounded-lg p-3 border-l-2 border-[#B52A32] text-sm text-[#D83A43]">
                 <AlertCircle size={14} className="inline mr-2" />
-                {error}
+                {error ?? cameraMessage}
               </div>
             )}
 
