@@ -1,27 +1,44 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { resolveSponsors } from "@/data/sponsors";
 
-type Sponsor = ReturnType<typeof resolveSponsors>[number];
+type Sponsor = { id: string; name: string; logoUrl: string; websiteUrl: string | null; tier: string; customTier: string | null; sortOrder: number };
 
 export function Sponsors() {
-  const sponsors = resolveSponsors();
+  const permanentSponsors = resolveSponsors();
+  const [additionalSponsors, setAdditionalSponsors] = useState<Sponsor[]>([]);
 
-  if (sponsors.length === 0) {
-    return null;
-  }
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/sponsors", { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load sponsors");
+        return response.json() as Promise<{ sponsors: Sponsor[] }>;
+      })
+      .then((result) => setAdditionalSponsors(result.sponsors))
+      .catch((error) => { if (error instanceof Error && error.name !== "AbortError") console.error("Unable to load sponsors"); });
+    return () => controller.abort();
+  }, []);
 
   /* ================================
      SEPARATE SPONSORS AND DEPARTMENTS
      ================================ */
 
-  const sponsorLogos = sponsors.filter(
-    (sponsor) => sponsor.tier !== "CUSTOM"
-  );
+  const permanentNames = new Set(permanentSponsors.map((sponsor) => sponsor.name.trim().toLowerCase()));
+  const seenNames = new Set(permanentNames);
+  const uniqueAdditionalSponsors = additionalSponsors.filter((sponsor) => {
+    const normalizedName = sponsor.name.trim().toLowerCase();
+    if (seenNames.has(normalizedName)) return false;
+    seenNames.add(normalizedName);
+    return true;
+  });
+  const sponsorLogos = [
+    ...permanentSponsors.filter((sponsor) => sponsor.tier !== "CUSTOM"),
+    ...uniqueAdditionalSponsors,
+  ];
 
-  const departmentLogos = sponsors.filter(
-    (sponsor) => sponsor.tier === "CUSTOM"
-  );
+  const departmentLogos = permanentSponsors.filter((sponsor) => sponsor.tier === "CUSTOM");
 
   /* ================================
      DEPARTMENT LOGO FALLBACK
@@ -99,17 +116,9 @@ export function Sponsors() {
                   "
                 >
                   {sponsor.logoUrl ? (
-                    <img
-                      src={sponsor.logoUrl}
-                      alt={`${sponsor.name} logo`}
-                      loading="lazy"
-                      className="
-                        block
-                        max-h-full
-                        max-w-full
-                        object-contain
-                      "
-                    />
+                    sponsor.websiteUrl ? <a href={sponsor.websiteUrl} target="_blank" rel="noopener noreferrer" className="flex h-full w-full items-center justify-center">
+                      <SponsorLogo sponsor={sponsor} />
+                    </a> : <SponsorLogo sponsor={sponsor} />
                   ) : (
                     <span className="text-center text-sm font-bold text-[#A8A8A8]/50 md:text-lg">
                       {sponsor.name}
@@ -212,4 +221,13 @@ export function Sponsors() {
       </div>
     </section>
   );
+}
+
+function SponsorLogo({ sponsor }: { sponsor: Sponsor }) {
+  return <img
+    src={sponsor.logoUrl}
+    alt={`${sponsor.name} logo`}
+    loading="lazy"
+    className="block max-h-full max-w-full object-contain"
+  />;
 }
