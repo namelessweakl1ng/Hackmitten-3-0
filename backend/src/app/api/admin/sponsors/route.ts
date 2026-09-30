@@ -43,7 +43,10 @@ export async function POST(request: Request) {
       } });
       return NextResponse.json({ sponsor }, { status: 201 });
     } catch (error) {
-      await deletePublicFile(stored.relativePath);
+      // Preserve the database error even if best-effort orphan cleanup fails.
+      await deletePublicFile(stored.relativePath).catch((cleanupError) => {
+        console.error("[sponsors] unable to clean up logo after failed create", cleanupError);
+      });
       throw error;
     }
   } catch (error) {

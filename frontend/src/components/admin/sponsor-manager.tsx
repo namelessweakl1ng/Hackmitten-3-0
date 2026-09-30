@@ -29,6 +29,17 @@ export function SponsorManager() {
   const [logo, setLogo] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
+  const selectLogo = (file: File | null) => {
+    setError(null);
+    if (file && !["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setLogo(null); setError("Logo must be a PNG, JPG, or WebP image."); return;
+    }
+    if (file && file.size > 8 * 1024 * 1024) {
+      setLogo(null); setError("Logo must be 8 MB or smaller."); return;
+    }
+    setLogo(file);
+  };
+
   useEffect(() => {
     if (!logo) { setPreview(null); return; }
     const url = URL.createObjectURL(logo); setPreview(url);
@@ -72,7 +83,7 @@ export function SponsorManager() {
       <div className="grid gap-5 lg:grid-cols-[180px_1fr]">
         <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-white/20 bg-[#080808] text-center text-xs text-[#A8A8A8] hover:border-[#B52A32]">
           {preview ? <img src={preview} alt="Logo preview" className="h-40 w-full object-contain p-3"/> : <><ImagePlus className="mb-2"/><span>Choose logo</span><span className="mt-1 text-[10px]">PNG, JPG, or WebP · max 8 MB</span></>}
-          <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" required onChange={(e) => setLogo(e.target.files?.[0] ?? null)}/>
+          <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" required onChange={(e) => selectLogo(e.target.files?.[0] ?? null)}/>
         </label>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Sponsor name"><input className={inputClass} required maxLength={120} value={name} onChange={(e) => setName(e.target.value)}/></Field>

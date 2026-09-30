@@ -108,19 +108,9 @@ export function Sponsors() {
                   "
                 >
                   {sponsor.logoUrl ? (
-                    <a href={sponsor.websiteUrl ?? undefined} target={sponsor.websiteUrl ? "_blank" : undefined} rel={sponsor.websiteUrl ? "noopener noreferrer" : undefined} className="flex h-full w-full items-center justify-center">
-                    <img
-                      src={sponsor.logoUrl}
-                      alt={`${sponsor.name} logo`}
-                      loading="lazy"
-                      className="
-                        block
-                        max-h-full
-                        max-w-full
-                        object-contain
-                      "
-                    />
-                    </a>
+                    sponsor.websiteUrl ? <a href={sponsor.websiteUrl} target="_blank" rel="noopener noreferrer" className="flex h-full w-full items-center justify-center">
+                      <SponsorLogo sponsor={sponsor} />
+                    </a> : <SponsorLogo sponsor={sponsor} />
                   ) : (
                     <span className="text-center text-sm font-bold text-[#A8A8A8]/50 md:text-lg">
                       {sponsor.name}
@@ -223,4 +213,13 @@ export function Sponsors() {
       </div>
     </section>
   );
+}
+
+function SponsorLogo({ sponsor }: { sponsor: Sponsor }) {
+  return <img
+    src={sponsor.logoUrl}
+    alt={`${sponsor.name} logo`}
+    loading="lazy"
+    className="block max-h-full max-w-full object-contain"
+  />;
 }
