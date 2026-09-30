@@ -153,6 +153,11 @@ export async function deletePrivateFile(relativePath: string): Promise<void> {
   if (fileName) await fs.rm(path.join(/*turbopackIgnore: true*/ PRIVATE_UPLOAD_ROOT, fileName), { force: true });
 }
 
+export async function deletePublicFile(relativePath: string): Promise<void> {
+  const match = relativePath.match(/^\/api\/uploads\/([a-z0-9_-]{1,40}_[a-f0-9]{12}\.(?:jpg|png|webp|gif))$/);
+  if (match) await fs.rm(path.join(/*turbopackIgnore: true*/ UPLOAD_ROOT, match[1]), { force: true });
+}
+
 export async function readPublicUpload(fileName: string): Promise<Buffer | null> {
   if (!/^[a-z0-9_-]{1,40}_[a-f0-9]{12}\.(?:jpg|png|webp|gif)$/.test(fileName)) return null;
   try {

@@ -190,19 +190,14 @@ function SponsorGlobe({ sponsors }: { sponsors: Sponsor[] }) {
               <stop offset="100%" stopColor="#fff" stopOpacity="0" />
             </radialGradient>
           </defs>
-          {/* outer glow ring */}
           <circle cx={SIZE / 2} cy={SIZE / 2} r={R + 18} fill="none" stroke="#6b7280" strokeOpacity="0.12" strokeWidth="18" />
-          {/* globe fill */}
           <circle cx={SIZE / 2} cy={SIZE / 2} r={R} fill="url(#gg)" />
           <circle cx={SIZE / 2} cy={SIZE / 2} r={R} fill="url(#shine)" />
-          {/* globe outline */}
           <circle cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none" stroke="#9ca3af" strokeOpacity="0.5" strokeWidth="2.5" />
-          {/* latitude rings */}
           {[-0.65, -0.35, 0, 0.35, 0.65].map((t, i) => {
             const rx2 = R * Math.sqrt(1 - t * t);
             return <ellipse key={i} cx={SIZE / 2} cy={SIZE / 2 + R * t} rx={rx2} ry={rx2 * 0.28} fill="none" stroke="#9ca3af" strokeOpacity="0.22" strokeWidth="1.2" />;
           })}
-          {/* longitude rings */}
           {[0, 45, 90, 135].map((deg, i) => (
             <ellipse key={i} cx={SIZE / 2} cy={SIZE / 2}
               rx={Math.max(1, R * Math.abs(Math.cos(deg * Math.PI / 180)))}

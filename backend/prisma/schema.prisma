@@ -53,6 +53,20 @@ model EventConfig {
   updatedAt           DateTime @updatedAt
 }
 
+model Sponsor {
+  id          String   @id @default(cuid())
+  name        String
+  logoUrl     String
+  websiteUrl  String?
+  tier        String   @default("PARTNER")
+  customTier  String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([sortOrder, createdAt])
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
