@@ -1,27 +1,36 @@
 "use client";
 
-import { resolveSponsors } from "@/data/sponsors";
+import { useEffect, useState } from "react";
 
-type Sponsor = ReturnType<typeof resolveSponsors>[number];
+type Sponsor = { id: string; name: string; logoUrl: string; websiteUrl: string | null; tier: string; customTier: string | null; sortOrder: number };
+
+const DEPARTMENTS: Sponsor[] = [
+  { id: "department-cse", name: "CSE", logoUrl: "/images/sponsors/cse.png", websiteUrl: null, tier: "CUSTOM", customTier: "Departments", sortOrder: 0 },
+  { id: "department-aiml", name: "AI&ML", logoUrl: "/images/sponsors/aiml.png", websiteUrl: null, tier: "CUSTOM", customTier: "Departments", sortOrder: 1 },
+];
 
 export function Sponsors() {
-  const sponsors = resolveSponsors();
+  const [sponsors, setSponsors] = useState<Sponsor[]>([]);
 
-  if (sponsors.length === 0) {
-    return null;
-  }
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/sponsors", { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load sponsors");
+        return response.json() as Promise<{ sponsors: Sponsor[] }>;
+      })
+      .then((result) => setSponsors(result.sponsors))
+      .catch((error) => { if (error instanceof Error && error.name !== "AbortError") console.error("Unable to load sponsors"); });
+    return () => controller.abort();
+  }, []);
 
   /* ================================
      SEPARATE SPONSORS AND DEPARTMENTS
      ================================ */
 
-  const sponsorLogos = sponsors.filter(
-    (sponsor) => sponsor.tier !== "CUSTOM"
-  );
+  const sponsorLogos = sponsors;
 
-  const departmentLogos = sponsors.filter(
-    (sponsor) => sponsor.tier === "CUSTOM"
-  );
+  const departmentLogos = DEPARTMENTS;
 
   /* ================================
      DEPARTMENT LOGO FALLBACK
@@ -99,6 +108,7 @@ export function Sponsors() {
                   "
                 >
                   {sponsor.logoUrl ? (
+                    <a href={sponsor.websiteUrl ?? undefined} target={sponsor.websiteUrl ? "_blank" : undefined} rel={sponsor.websiteUrl ? "noopener noreferrer" : undefined} className="flex h-full w-full items-center justify-center">
                     <img
                       src={sponsor.logoUrl}
                       alt={`${sponsor.name} logo`}
@@ -110,6 +120,7 @@ export function Sponsors() {
                         object-contain
                       "
                     />
+                    </a>
                   ) : (
                     <span className="text-center text-sm font-bold text-[#A8A8A8]/50 md:text-lg">
                       {sponsor.name}
