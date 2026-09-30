@@ -7,7 +7,7 @@ import {
   Phone,
   X,
 } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { COORDINATORS } from "@/data/coordinators";
 import { DEVELOPING_TEAM } from "@/data/developing-team";
@@ -154,28 +154,74 @@ function CoordinatorGroup({
   title: string;
   coordinators: Coordinator[];
 }) {
-  if (coordinators.length === 0) {
-    return null;
-  }
+  if (coordinators.length === 0) return null;
+
+  const isStudent = title === "STUDENT COORDINATORS";
 
   return (
     <div>
-      {/* Group heading */}
       <div className="mb-6 flex items-center gap-4">
         <span className="mono whitespace-nowrap text-[10px] uppercase tracking-[0.3em] text-[#A8A8A8]">
           {title}
         </span>
-
         <div className="h-px flex-1 bg-white/10" />
       </div>
 
-      {/* Coordinator cards */}
-      <div className="grid grid-cols-4 gap-1 sm:grid-cols-4 sm:gap-3 md:gap-4 lg:gap-6">
-        {coordinators.map((coordinator) => (
-          <CoordinatorCard
-            key={coordinator.id}
-            coordinator={coordinator}
-          />
+      {isStudent ? (
+        <StudentCarousel coordinators={coordinators} />
+      ) : (
+        <div className="grid grid-cols-4 gap-1 sm:grid-cols-4 sm:gap-3 md:gap-4 lg:gap-6">
+          {coordinators.map((coordinator) => (
+            <CoordinatorCard key={coordinator.id} coordinator={coordinator} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
+   STUDENT CAROUSEL  – infinite auto-scroll, one card at a time
+================================================================ */
+
+function StudentCarousel({ coordinators }: { coordinators: Coordinator[] }) {
+  const [paused, setPaused] = useState(false);
+  const items = [...coordinators, ...coordinators];
+  const count = coordinators.length;
+  const dur = count * 2.5;
+
+  return (
+    <div
+      className="relative overflow-hidden"
+      style={{ "--gap": "12px", "--card-w": "clamp(140px, 28vw, 220px)" } as React.CSSProperties}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      <style>{`
+        @keyframes scroll-left {
+          from { transform: translateX(0); }
+          to   { transform: translateX(calc(-1 * ${count} * (var(--card-w) + var(--gap)))); }
+        }
+        .marquee-track {
+          animation: scroll-left ${dur}s linear infinite;
+        }
+        .marquee-track.paused { animation-play-state: paused; }
+      `}</style>
+
+      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-black/80 to-transparent sm:w-16" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-black/80 to-transparent sm:w-16" />
+
+      <div
+        className={`flex marquee-track${paused ? " paused" : ""}`}
+        style={{ gap: "var(--gap)" }}
+      >
+        {items.map((coordinator, i) => (
+          <div
+            key={`${coordinator.id}-${i}`}
+            style={{ width: "var(--card-w)", flexShrink: 0 }}
+          >
+            <CoordinatorCard coordinator={coordinator} />
+          </div>
         ))}
       </div>
     </div>
@@ -326,7 +372,12 @@ function CoordinatorCard({
 ================================================================ */
 
 function DevelopingTeam() {
+  const [paused, setPaused] = useState(false);
   if (DEVELOPING_TEAM.length === 0) return null;
+
+  const items = [...DEVELOPING_TEAM, ...DEVELOPING_TEAM];
+  const count = DEVELOPING_TEAM.length;
+  const dur = count * 2.5;
 
   return (
     <div>
@@ -336,10 +387,37 @@ function DevelopingTeam() {
         </span>
         <div className="h-px flex-1 bg-white/10" />
       </div>
-      <div className="grid grid-cols-5 gap-1 sm:gap-2 md:gap-4 lg:gap-6">
-        {DEVELOPING_TEAM.map((member) => (
-          <DevelopingTeamCard key={member.id} member={member} />
-        ))}
+
+      <div
+        className="relative overflow-hidden"
+        style={{ "--gap": "12px", "--card-w": "clamp(150px, 32vw, 240px)" } as React.CSSProperties}
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+      >
+        <style>{`
+          @keyframes scroll-right {
+            from { transform: translateX(calc(-1 * ${count} * (var(--card-w) + var(--gap)))); }
+            to   { transform: translateX(0px); }
+          }
+          .dev-track {
+            animation: scroll-right ${dur}s linear infinite;
+          }
+          .dev-track.paused { animation-play-state: paused; }
+        `}</style>
+
+        <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-black/80 to-transparent sm:w-16" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-black/80 to-transparent sm:w-16" />
+
+        <div
+          className={`flex dev-track${paused ? " paused" : ""}`}
+          style={{ gap: "var(--gap)" }}
+        >
+          {items.map((member, i) => (
+            <div key={`${member.id}-${i}`} style={{ width: "var(--card-w)", flexShrink: 0 }}>
+              <DevelopingTeamCard member={member} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
