@@ -29,7 +29,7 @@ export const DEVELOPING_TEAM: DevelopingTeamMember[] = [
     id: "developer-3",
     name: "Sharath HN",
     role: "Developer",
-    image: "/images/developers/person3.png",
+    image: "/images/developers/SharathHN.jpeg",
     linkedin: "https://www.linkedin.com/in/sharath-hn-368449228/",
     github: "https://github.com/sharath-6363",
   },
