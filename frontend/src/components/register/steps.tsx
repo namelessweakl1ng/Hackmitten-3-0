@@ -154,11 +154,17 @@ export function StepTeam() {
 export function StepMembers() {
   const { members, setMember, addMember, removeMember, next, prev } = useRegisterStore();
 
-  const memberValid = (m: typeof members[0]) =>
-    m.fullName.trim().length >= 2 &&
-    m.email.toLowerCase().trim().endsWith("@gmail.com") &&
-    /^[6-9][0-9]{9}$/.test(m.phone.trim()) &&
-    m.college.trim().length >= 2;
+  const memberValid = (m: typeof members[0]) => {
+    const imgValid = !m.participantImage || (
+      ["image/jpeg", "image/png", "image/webp"].includes(m.participantImage.type) &&
+      m.participantImage.size <= 1024 * 1024
+    );
+    return m.fullName.trim().length >= 2 &&
+      m.email.toLowerCase().trim().endsWith("@gmail.com") &&
+      /^[6-9][0-9]{9}$/.test(m.phone.trim()) &&
+      m.college.trim().length >= 2 &&
+      imgValid;
+  };
 
   const allValid = members.every(memberValid);
   const emails = members.map((m) => m.email.toLowerCase().trim());
@@ -225,6 +231,9 @@ export function StepMembers() {
                   <span className="mono text-xs uppercase tracking-widest text-[#A8A8A8]">Participant photo (optional, JPEG / PNG / WebP, max 1 MiB)</span>
                   <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setMember(i, { participantImage: e.target.files?.[0] ?? null })} className="mt-2 block w-full text-xs text-[#A8A8A8]" />
                   {m.participantImage && <span className="mt-1 block text-xs text-[#A8A8A8]">Selected: {m.participantImage.name} ({Math.ceil(m.participantImage.size / 1024)} KiB)</span>}
+                  {m.participantImage && (!["image/jpeg", "image/png", "image/webp"].includes(m.participantImage.type) || m.participantImage.size > 1024 * 1024) && (
+                    <span className="mt-1 block text-xs text-[#D83A43] flex items-center gap-1.5"><AlertCircle size={12} /> Invalid format or size &gt; 1MB</span>
+                  )}
                 </label>
               </div>
 
@@ -343,7 +352,11 @@ export function StepPayment() {
   const qrUrl = PAYMENT_QR;
 
   const validTxn = transactionId.trim().length >= 4 && transactionId.trim().length <= 100;
-  const valid = validTxn && screenshot !== null;
+  const screenshotValid = screenshot ? (
+    ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(screenshot.type) &&
+    screenshot.size <= 8 * 1024 * 1024
+  ) : false;
+  const valid = validTxn && screenshotValid;
   const transactionError = transactionId.trim().length > 0 && !validTxn
     ? transactionId.trim().length < 4
       ? "• Transaction ID must be at least 4 characters"
@@ -460,13 +473,18 @@ export function StepPayment() {
         <div className="mt-2 glass rounded-lg p-4 border border-dashed border-white/15 hover:border-[#B52A32] transition-colors">
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
+            accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg"
             onChange={(e) => setScreenshot(e.target.files?.[0] ?? null)}
             className="block w-full text-xs md:text-sm text-[#A8A8A8] file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-[#B52A32] file:text-white file:text-xs file:font-semibold file:cursor-pointer hover:file:bg-[#D83A43] cursor-pointer"
           />
           {screenshot && (
             <div className="mt-3 text-xs text-[#A8A8A8]">
               Selected: {screenshot.name} ({Math.round(screenshot.size / 1024)} KB)
+            </div>
+          )}
+          {screenshot && (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(screenshot.type) || screenshot.size > 8 * 1024 * 1024) && (
+            <div className="mt-2 text-xs text-[#D83A43] flex items-center gap-1.5">
+              <AlertCircle size={12} /> Invalid format or size &gt; 8MB
             </div>
           )}
           {screenshot && screenshotPreview && (
