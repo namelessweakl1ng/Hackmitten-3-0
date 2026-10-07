@@ -20,7 +20,14 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
   try {
     const transport = nodemailer.createTransport({ host, port, secure: port === 465, requireTLS: port !== 465,
       auth: { user, pass: password }, connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 20_000 });
-    await transport.sendMail({ from, to: payload.to, subject: payload.subject, html: payload.html, text: payload.text });
+    await transport.sendMail({ 
+      from, 
+      to: payload.to, 
+      replyTo: from,
+      subject: payload.subject, 
+      html: payload.html, 
+      text: payload.text 
+    });
     return { success: true, message: "Email accepted by SMTP server", provider: "smtp" };
   } catch (error) {
     console.error("[email] SMTP delivery failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
