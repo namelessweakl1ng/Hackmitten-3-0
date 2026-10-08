@@ -22,13 +22,15 @@ serve({
     if (!(await file.exists())) {
       file = Bun.file(join(import.meta.dir, "out", path + ".html"));
       if (!(await file.exists())) {
-        file = Bun.file(join(import.meta.dir, "out", "404.html"));
-        if (!(await file.exists())) {
-          return new Response("404 Not Found", { status: 404 });
+        const notFoundFile = Bun.file(join(import.meta.dir, "out", "404.html"));
+        if (await notFoundFile.exists()) {
+          return new Response(notFoundFile, { status: 404, headers: { "Content-Type": "text/html" } });
         }
+        return new Response("404 Not Found", { status: 404 });
       }
     }
     
+    // Bun correctly infers the Content-Type from the file extension automatically
     return new Response(file);
   },
 });
