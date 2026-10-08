@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit",
     "postinstall": "prisma generate",
     "test": "bun test tests",
-    "build": "prisma generate && next build --webpack && node scripts/prepare-standalone.mjs",
+    "build": "prisma generate && next build --webpack",
     "start": "node scripts/start-standalone.mjs",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
