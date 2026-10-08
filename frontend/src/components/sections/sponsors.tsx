@@ -90,7 +90,7 @@ function SponsorGlobe({ sponsors }: { sponsors: Sponsor[] }) {
   const pitch = 0.42;
 
   const [mounted, setMounted] = useState(false);
-  const [, tick] = useState(0);
+  const [yaw, setYaw] = useState(0);
   const [hovered, setHovered] = useState<string | null>(null);
 
   const positions = sponsors.map((_, i) => ({
@@ -98,6 +98,7 @@ function SponsorGlobe({ sponsors }: { sponsors: Sponsor[] }) {
     theta: Math.PI * (1 + Math.sqrt(5)) * i,
   }));
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
@@ -112,7 +113,7 @@ function SponsorGlobe({ sponsors }: { sponsors: Sponsor[] }) {
         // Add manual velocity + a constant smooth baseline rotation speed
         yawRef.current += (velRef.current + 0.6) * dt;
       }
-      tick((v) => v + 1);
+      setYaw(yawRef.current);
       rafRef.current = requestAnimationFrame(frame);
     }
     rafRef.current = requestAnimationFrame(frame);
@@ -165,10 +166,8 @@ function SponsorGlobe({ sponsors }: { sponsors: Sponsor[] }) {
     );
   }
 
-  // eslint-disable-next-line react-hooks/refs
-  const currentYaw = yawRef.current;
   const projected = positions
-    .map(({ phi, theta }, i) => ({ ...project(phi, theta, currentYaw), sponsor: sponsors[i] }))
+    .map(({ phi, theta }, i) => ({ ...project(phi, theta, yaw), sponsor: sponsors[i] }))
     .sort((a, b) => a.z - b.z);
 
   return (
