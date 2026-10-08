@@ -31,7 +31,13 @@ serve({
     }
     
     // Bun correctly infers the Content-Type from the file extension automatically
-    return new Response(file);
+    // But let's explicitly set it just to be 100% foolproof for strict browsers!
+    const headers = new Headers();
+    if (path.endsWith(".css")) headers.set("Content-Type", "text/css");
+    else if (path.endsWith(".js")) headers.set("Content-Type", "application/javascript");
+    else if (path.endsWith(".woff2")) headers.set("Content-Type", "font/woff2");
+    
+    return new Response(file, { headers });
   },
 });
 
