@@ -1,95 +1,70 @@
 pipeline {
     agent any
 
-    stages {
+    // Optional environment variables if Jenkins needs to know where Bun is installed
+    // environment {
+    //     PATH = "${env.PATH}:/home/jenkins/.bun/bin"
+    // }
 
-        stage('Clean Workspace') {
+     stage('Clean Workspace') {
             steps {
                 echo 'Cleaning Jenkins workspace...'
                 deleteDir()
             }
         }
 
+    stages {
         stage('Checkout') {
             steps {
-                echo 'Checking out source code...'
+                // This downloads your latest code from Git
                 checkout scm
             }
         }
 
         stage('Install') {
             steps {
-                echo 'Installing dependencies...'
+                // Install all the required packages using Bun
                 sh 'bun install'
             }
         }
 
         stage('Quality Checks') {
             steps {
-                echo 'Running lint...'
+                // Check for syntax and typing errors
                 sh 'bun run lint'
-
-                echo 'Running typecheck...'
                 sh 'bun run typecheck'
             }
         }
 
         stage('Test') {
             steps {
-                echo 'Running tests...'
+                // Run all integration tests
                 sh 'bun test'
             }
         }
 
         stage('Build') {
             steps {
-                echo 'Building frontend and backend...'
+                // Package the frontend and backend into standalone apps
                 sh 'bun run build'
-            }
-        }
-
-        stage('Package') {
-            steps {
-                sh '''
-                    set -e
-
-                    echo "Packaging frontend..."
-                    tar -czf frontend.tar.gz -C frontend/out .
-
-                    echo "Packaging backend..."
-                    tar -czf backend.tar.gz -C backend/.next/standalone/backend .
-
-                    echo "Generated artifacts:"
-                    ls -lh frontend.tar.gz backend.tar.gz
-                '''
-
-                archiveArtifacts artifacts: '*.tar.gz', fingerprint: true
             }
         }
 
         stage('Deploy') {
             steps {
-                 sh '''
-                    
-                    echo "Deployment"
-                    
-                '''
+                // Your maintainer can add server restart commands here later.
+                // For now, it just prints a success message.
+                echo 'Ready for the maintainer to deploy to the server!'
             }
         }
     }
 
     post {
         success {
-            echo 'SUCCESS: Build, package and deployment completed successfully!'
+            echo 'SUCCESS: The code is perfectly built and tested!'
         }
-
         failure {
-            echo 'FAILED: Pipeline failed. Check the stage logs for details.'
-        }
-
-        always {
-            echo 'Complete..'
-            
+            echo 'FAILED: There is a bug or typo in the code. Please fix it and push again.'
         }
     }
 }
