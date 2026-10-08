@@ -6,14 +6,18 @@ pipeline {
     //     PATH = "${env.PATH}:/home/jenkins/.bun/bin"
     // }
 
-     stage('Clean Workspace') {
+    
+
+    stages {
+
+         stage('Clean Workspace') {
             steps {
                 echo 'Cleaning Jenkins workspace...'
                 deleteDir()
             }
         }
 
-    stages {
+        
         stage('Checkout') {
             steps {
                 // This downloads your latest code from Git
