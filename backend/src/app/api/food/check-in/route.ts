@@ -91,7 +91,7 @@ export async function POST(req: Request) {
         checkedInAt: checkIn.createdAt,
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && (err as any).code === "P2002") {
         // Unique constraint — already checked in
         const existing = await db.foodCheckIn.findUnique({
           where: { participantId_mealId: { participantId: participant.id, mealId: meal.id } },

@@ -27,7 +27,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     await db.meal.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && (err as any).code === "P2003") {
       return NextResponse.json(
         { error: "This meal has check-ins and cannot be deleted. Disable it instead." },
         { status: 409 },

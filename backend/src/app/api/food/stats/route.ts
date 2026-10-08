@@ -67,7 +67,7 @@ export async function GET(req: Request) {
           orderBy: { createdAt: "asc" },
         })
       : [];
-    const checkInsByMeal = new Map(meals.map((meal) => [meal.id, [] as typeof allCheckIns]));
+    const checkInsByMeal = new Map<string, typeof allCheckIns>(meals.map((meal) => [meal.id, []]));
     for (const checkIn of allCheckIns) {
       if (approvedIds.has(checkIn.participantId)) {
         checkInsByMeal.get(checkIn.mealId)?.push(checkIn);
