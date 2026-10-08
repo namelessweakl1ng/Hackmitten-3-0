@@ -8,7 +8,6 @@
     "shared"
   ],
   "scripts": {
-    "postinstall": "cd backend && bun run db:generate",
     "install:all": "bun install",
     "dev": "concurrently \"bun run dev:frontend\" \"bun run dev:backend\"",
     "dev:frontend": "cd frontend && bun run dev",

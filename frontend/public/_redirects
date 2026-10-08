@@ -1,0 +1,2 @@
+/api/*  https://hackmitten-3-0-api.mitt.edu.in/api/:splat  200!
+/*      /index.html                                        200
