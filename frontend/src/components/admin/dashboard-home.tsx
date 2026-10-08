@@ -115,7 +115,7 @@ export function AdminDashboardHome() {
               data?.recentRegistrations?.map((t) => (
                 <Link
                   key={t.id}
-                  href={`/admin/registrations/${t.id}`}
+                  href={`/admin/registrations/detail?id=${t.id}`}
                   className="flex items-center gap-4 p-4 hover:bg-white/5 transition-colors"
                 >
                   <div className="flex-1 min-w-0">

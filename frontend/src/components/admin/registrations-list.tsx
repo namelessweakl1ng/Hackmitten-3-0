@@ -143,7 +143,7 @@ export function AdminRegistrationsList() {
                 teams.map((t) => (
                   <tr key={t.id} className="hover:bg-white/5 transition-colors cursor-pointer">
                     <td className="px-4 py-3">
-                      <Link href={`/admin/registrations/${t.id}`} className="block">
+                      <Link href={`/admin/registrations/detail?id=${t.id}`} className="block">
                         <div className="font-semibold text-white">{t.teamName}</div>
                         <div className="mono text-[10px] text-[#A8A8A8]">
                           {t.registrationId ?? "—"}
@@ -157,7 +157,7 @@ export function AdminRegistrationsList() {
                       {t.college ?? "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <Link href={`/admin/registrations/${t.id}`} className="block">
+                      <Link href={`/admin/registrations/detail?id=${t.id}`} className="block">
                         <span className={`text-xs font-semibold ${STATUS_COLORS[t.payment?.status ?? "PENDING"] ?? "text-[#A8A8A8]"}`}>
                           {t.payment?.status ?? "NONE"}
                         </span>
@@ -169,14 +169,14 @@ export function AdminRegistrationsList() {
                       </Link>
                     </td>
                     <td className="px-4 py-3">
-                      <Link href={`/admin/registrations/${t.id}`} className="block">
+                      <Link href={`/admin/registrations/detail?id=${t.id}`} className="block">
                         <span className={`text-xs font-semibold ${STATUS_COLORS[t.status] ?? "text-[#A8A8A8]"}`}>
                           {t.status.replace(/_/g, " ")}
                         </span>
                       </Link>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-white">
-                      <Link href={`/admin/registrations/${t.id}`} className="block">
+                      <Link href={`/admin/registrations/detail?id=${t.id}`} className="block">
                         <span className="mono text-xs text-white font-medium">{formatRegistered(t.createdAt)}</span>
                       </Link>
                     </td>

@@ -8,30 +8,9 @@ if (!["http:", "https:"].includes(parsedBackendOrigin.protocol) || parsedBackend
 }
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-  outputFileTracingRoot: resolve(process.cwd(), ".."),
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${backendApiOrigin}/api/:path*`,
-      },
-      {
-        source: "/uploads/:fileName",
-        destination: `${backendApiOrigin}/api/uploads/:fileName`,
-      },
-    ];
-  },
-  async headers() {
-    return [{
-      source: "/:path*",
-      headers: [
-        { key: "X-Content-Type-Options", value: "nosniff" },
-        { key: "X-Frame-Options", value: "DENY" },
-        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-        { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
-      ],
-    }];
+  output: "export",
+  images: {
+    unoptimized: true,
   },
 };
 

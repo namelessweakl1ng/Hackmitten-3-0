@@ -4,8 +4,8 @@
   "version": "3.0.0",
   "scripts": {
     "dev": "next dev --webpack -p 3000",
-    "build": "next build --webpack && node scripts/prepare-standalone.mjs",
-    "start": "node .next/standalone/frontend/server.js",
+    "build": "next build --webpack",
+    "start": "bun run serve-static.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "bun test tests"

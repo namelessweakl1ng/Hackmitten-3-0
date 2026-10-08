@@ -243,7 +243,7 @@ export function AdminRegistrationDetail({ id }: { id: string }) {
                   <div className="mono text-[10px] text-[#B52A32] mt-1">ID: {m.participantId}</div>
                 )}
                 {m.qrToken && (
-                  <Link href={`/pass/${m.qrToken}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] text-[#A8A8A8] hover:text-white mt-1">
+                  <Link href={`/pass?token=${m.qrToken}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] text-[#A8A8A8] hover:text-white mt-1">
                     <ExternalLink size={10} /> View Digital Pass
                   </Link>
                 )}
