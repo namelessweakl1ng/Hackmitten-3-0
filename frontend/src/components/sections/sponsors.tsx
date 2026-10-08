@@ -107,9 +107,10 @@ function SponsorGlobe({ sponsors }: { sponsors: Sponsor[] }) {
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       if (!dragRef.current.active) {
-        velRef.current *= 0.97;
-        if (Math.abs(velRef.current) < 0.02) velRef.current = 0.18;
-        yawRef.current += velRef.current * dt;
+        // Smoothly decay manual drag velocity
+        velRef.current *= 0.95;
+        // Add manual velocity + a constant smooth baseline rotation speed
+        yawRef.current += (velRef.current + 0.6) * dt;
       }
       tick((v) => v + 1);
       rafRef.current = requestAnimationFrame(frame);
