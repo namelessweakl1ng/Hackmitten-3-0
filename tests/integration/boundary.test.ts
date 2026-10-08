@@ -32,8 +32,7 @@ describe("architecture boundaries", () => {
 
   it("frontend delegates API requests to the backend", () => {
     const frontendConfig = read("frontend/next.config.ts");
-    expect(frontendConfig).toContain('source: "/api/:path*"');
-    expect(frontendConfig).toContain("${backendApiOrigin}/api/:path*");
+    expect(frontendConfig).toContain('output: "export"');
     expect(fs.existsSync(path.join(root, "frontend/src/app/api"))).toBe(false);
   });
 

@@ -43,11 +43,64 @@ pipeline {
             }
         }
 
+        stage('Package') {
+            steps {
+                sh '''
+                    set -e
+                    echo "Packaging frontend..."
+                    tar -czf frontend.tar.gz -C frontend/out .
+                    
+                    echo "Packaging backend..."
+                    tar -czf backend.tar.gz -C backend/.next/standalone/backend .
+                '''
+                archiveArtifacts artifacts: '*.tar.gz', fingerprint: true
+            }
+        }
+
         stage('Deploy') {
             steps {
-                // Your maintainer can add server restart commands here later.
-                // For now, it just prints a success message.
-                echo 'Ready for the maintainer to deploy to the server!'
+                // IMPORTANT: You must add an SSH Credential in Jenkins named 'production-server-key'
+                // and replace 'ubuntu@your.server.com' with your actual server IP or domain.
+                sshagent(['production-server-key']) {
+                    sh '''
+                        set -e
+                        DEPLOY_USER="ubuntu"
+                        DEPLOY_HOST="your.server.com"
+                        APP_NAME="hackmitten"
+                        
+                        echo "Uploading artifacts..."
+                        scp -o StrictHostKeyChecking=no frontend.tar.gz ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/
+                        scp -o StrictHostKeyChecking=no backend.tar.gz ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/
+
+                        echo "Deploying on server..."
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+                            set -e
+                            
+                            # Create versioned release directory based on timestamp
+                            RELEASE_DIR=/opt/${APP_NAME}/releases/\\$(date +%Y%m%d-%H%M%S)
+                            
+                            mkdir -p \\$RELEASE_DIR/frontend
+                            mkdir -p \\$RELEASE_DIR/backend
+                            
+                            tar -xzf /tmp/frontend.tar.gz -C \\$RELEASE_DIR/frontend
+                            tar -xzf /tmp/backend.tar.gz -C \\$RELEASE_DIR/backend
+                            
+                            # Create the parent directories for symlinks just in case
+                            mkdir -p /opt/${APP_NAME}/frontend
+                            mkdir -p /opt/${APP_NAME}/backend
+                            
+                            # Switch the current symlinks to point to the new release
+                            ln -sfn \\$RELEASE_DIR/frontend /opt/${APP_NAME}/frontend/current
+                            ln -sfn \\$RELEASE_DIR/backend /opt/${APP_NAME}/backend/current
+                            
+                            # Restart systemd services
+                            sudo systemctl restart hackmitten-frontend
+                            sudo systemctl restart hackmitten-backend
+                            
+                            rm -f /tmp/frontend.tar.gz /tmp/backend.tar.gz
+                        "
+                    '''
+                }
             }
         }
     }
