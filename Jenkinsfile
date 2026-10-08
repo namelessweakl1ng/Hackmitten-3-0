@@ -88,8 +88,8 @@ pipeline {
         }
 
         always {
-            echo 'Cleaning Jenkins workspace after pipeline...'
-            deleteDir()
+            echo 'Complete..'
+            
         }
     }
 }
