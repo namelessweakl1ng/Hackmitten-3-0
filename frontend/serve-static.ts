@@ -19,12 +19,13 @@ serve({
     
     let file = Bun.file(join(import.meta.dir, "out", path));
     
-    // Handle Next.js clean URLs (e.g., /login -> /login.html)
     if (!(await file.exists())) {
       file = Bun.file(join(import.meta.dir, "out", path + ".html"));
       if (!(await file.exists())) {
-        // Fallback to 404
         file = Bun.file(join(import.meta.dir, "out", "404.html"));
+        if (!(await file.exists())) {
+          return new Response("404 Not Found", { status: 404 });
+        }
       }
     }
     
