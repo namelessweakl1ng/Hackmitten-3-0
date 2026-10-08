@@ -135,12 +135,12 @@ function SponsorGlobe({ sponsors }: { sponsors: Sponsor[] }) {
   }
   function onPointerUp() { dragRef.current.active = false; }
 
-  function project(phi: number, theta: number) {
+  function project(phi: number, theta: number, yaw: number) {
     const x0 = R * Math.sin(phi) * Math.cos(theta);
     const y0 = R * Math.cos(phi);
     const z0 = R * Math.sin(phi) * Math.sin(theta);
-    const x1 = x0 * Math.cos(yawRef.current) + z0 * Math.sin(yawRef.current);
-    const z1 = -x0 * Math.sin(yawRef.current) + z0 * Math.cos(yawRef.current);
+    const x1 = x0 * Math.cos(yaw) + z0 * Math.sin(yaw);
+    const z1 = -x0 * Math.sin(yaw) + z0 * Math.cos(yaw);
     const y2 = y0 * Math.cos(pitch) - z1 * Math.sin(pitch);
     const z2 = y0 * Math.sin(pitch) + z1 * Math.cos(pitch);
     const raw = (z2 + R * 1.6) / (R * 2.6);
@@ -164,8 +164,10 @@ function SponsorGlobe({ sponsors }: { sponsors: Sponsor[] }) {
     );
   }
 
+  // eslint-disable-next-line react-hooks/refs
+  const currentYaw = yawRef.current;
   const projected = positions
-    .map(({ phi, theta }, i) => ({ ...project(phi, theta), sponsor: sponsors[i] }))
+    .map(({ phi, theta }, i) => ({ ...project(phi, theta, currentYaw), sponsor: sponsors[i] }))
     .sort((a, b) => a.z - b.z);
 
   return (
