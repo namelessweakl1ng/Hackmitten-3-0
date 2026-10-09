@@ -31,7 +31,7 @@ export function MealManager() {
   const qc = useQueryClient();
   const { data, isLoading, error: queryError } = useQuery<{ meals: Meal[] }>({
     queryKey: ["admin-meals"],
-    queryFn: () => mealRequest<{ meals: Meal[] }>("/api/admin/meals"),
+    queryFn: () => mealRequest<{ meals: Meal[] }>("https://hackmitten-3-0-api.mitt.edu.in/api/admin/meals"),
   });
   const meals: Meal[] = data?.meals ?? [];
 
@@ -43,7 +43,7 @@ export function MealManager() {
   const create = async () => {
     setBusy(true); setError(null);
     try {
-      await mealRequest("/api/admin/meals", {
+      await mealRequest("https://hackmitten-3-0-api.mitt.edu.in/api/admin/meals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),

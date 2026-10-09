@@ -8,7 +8,7 @@ export function EventSettingsEditor() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery<{ config: Config }>({
     queryKey: ["config"],
-    queryFn: async () => { const response = await fetch("/api/admin/config"); if (!response.ok) throw new Error("Unable to load registration settings"); return response.json(); },
+    queryFn: async () => { const response = await fetch("https://hackmitten-3-0-api.mitt.edu.in/api/admin/config"); if (!response.ok) throw new Error("Unable to load registration settings"); return response.json(); },
   });
   const [draft, setDraft] = useState<Config | null>(null);
   const form = draft ?? data?.config ?? { registrationEnabled: false, registrationLimit: null };
@@ -18,7 +18,7 @@ export function EventSettingsEditor() {
   const save = async () => {
     setSaving(true); setSaved(false); setError(null);
     try {
-      const response = await fetch("/api/admin/config", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+      const response = await fetch("https://hackmitten-3-0-api.mitt.edu.in/api/admin/config", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Unable to save registration settings");
       setDraft(result.config); setSaved(true);

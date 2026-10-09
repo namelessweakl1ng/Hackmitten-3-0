@@ -32,7 +32,7 @@ export interface EventStateInfo {
 export function useEventState() {
   return useQuery<EventStateInfo>({
     queryKey: ["event-state"],
-    queryFn: async () => (await fetch("/api/event-state")).json(),
+    queryFn: async () => (await fetch("https://hackmitten-3-0-api.mitt.edu.in/api/event-state")).json(),
     staleTime: 60_000, // refresh every minute
     refetchInterval: 60_000,
   });

@@ -17,7 +17,7 @@ export function CredentialsManager() {
     e.preventDefault();
     setError(null); setSuccess(false); setBusy(true);
     try {
-      const res = await fetch("/api/admin/credentials", {
+      const res = await fetch("https://hackmitten-3-0-api.mitt.edu.in/api/admin/credentials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newUsername, newPassword, recoveryKey }),

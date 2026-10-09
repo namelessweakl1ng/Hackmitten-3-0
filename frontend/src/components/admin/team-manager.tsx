@@ -36,7 +36,7 @@ export function TeamManager() {
 
   const { data, isLoading, error: queryError } = useQuery<{ teams: Team[] }>({
     queryKey: ["admin-teams"],
-    queryFn: () => fetchJson("/api/admin/teams"),
+    queryFn: () => fetchJson("https://hackmitten-3-0-api.mitt.edu.in/api/admin/teams"),
   });
   const teams: Team[] = data?.teams ?? [];
   const filtered = teams.filter((t) => {
@@ -248,7 +248,7 @@ function TeamFormModal({
         }
       }
 
-      const url = isEdit ? `/api/admin/teams/${team!.id}` : "/api/admin/teams";
+      const url = isEdit ? `/api/admin/teams/${team!.id}` : "https://hackmitten-3-0-api.mitt.edu.in/api/admin/teams";
       const method = isEdit ? "PATCH" : "POST";
       const body: any = { teamName, college: college || undefined, members, status };
       const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });

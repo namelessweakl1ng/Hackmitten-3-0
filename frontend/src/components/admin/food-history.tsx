@@ -26,7 +26,7 @@ export function AdminFoodHistory() {
 
   const { data: mealsData, error: mealsError } = useQuery<{ meals: HistoryMeal[] }>({
     queryKey: ["meals"],
-    queryFn: () => fetchJson("/api/meals"),
+    queryFn: () => fetchJson("https://hackmitten-3-0-api.mitt.edu.in/api/meals"),
   });
   const meals = mealsData?.meals ?? [];
 

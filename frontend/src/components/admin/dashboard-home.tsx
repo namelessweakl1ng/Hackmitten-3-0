@@ -55,7 +55,7 @@ const STATUS_COLORS: Record<string, string> = {
 export function AdminDashboardHome() {
   const { data, isLoading, error: queryError } = useQuery<Stats>({
     queryKey: ["admin-stats"],
-    queryFn: () => fetchJson("/api/admin/stats"),
+    queryFn: () => fetchJson("https://hackmitten-3-0-api.mitt.edu.in/api/admin/stats"),
     refetchInterval: 15000,
   });
 
@@ -70,7 +70,7 @@ export function AdminDashboardHome() {
           <p className="text-sm text-[#A8A8A8] mt-1">Real-time overview of Hackmitten 3.0</p>
         </div>
         <a
-          href="/api/admin/export"
+          href="https://hackmitten-3-0-api.mitt.edu.in/api/admin/export"
           className="flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs text-white hover:border-[#B52A32] hover:bg-white/5 transition-all whitespace-nowrap"
         >
           <Download size={14} /> Export CSV

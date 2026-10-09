@@ -49,7 +49,7 @@ export function CoordinatorPortal() {
 
   const { data, isLoading, error } = useQuery<{ teams: ApprovedTeam[] }>({
     queryKey: ["coordinator-teams"],
-    queryFn: () => fetchCoordinatorData("/api/coordinator/teams"),
+    queryFn: () => fetchCoordinatorData("https://hackmitten-3-0-api.mitt.edu.in/api/coordinator/teams"),
   });
   const teams: ApprovedTeam[] = data?.teams ?? [];
 
@@ -260,7 +260,7 @@ function MealConsumptionView() {
 
   const { data, isLoading, error } = useQuery<{ meals: MealStat[]; totalApproved: number }>({
     queryKey: ["food-stats-coordinator"],
-    queryFn: () => fetchCoordinatorData("/api/food/stats"),
+    queryFn: () => fetchCoordinatorData("https://hackmitten-3-0-api.mitt.edu.in/api/food/stats"),
     refetchInterval: 15000,
   });
   const meals = data?.meals ?? [];
@@ -389,7 +389,7 @@ async function fetchCoordinatorData<T>(url: string): Promise<T> {
 
 // The authorized server export reads complete team/member/payment rows from PostgreSQL.
 export function downloadTeamsCSV() {
-  window.location.assign("/api/coordinator/teams/export");
+  window.location.assign("https://hackmitten-3-0-api.mitt.edu.in/api/coordinator/teams/export");
 }
 async function downloadParticipantQR(fullName: string, qrToken: string) {
   // Generate QR code data URL from the opaque token (this is what the scanner reads)

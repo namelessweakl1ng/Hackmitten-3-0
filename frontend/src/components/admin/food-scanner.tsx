@@ -62,7 +62,7 @@ export function FoodScannerApp() {
   // Load meals
   const { data: mealsData, error: mealsError } = useQuery<{ meals: { id: string; type: string; label: string; enabled: boolean }[] }>({
     queryKey: ["meals"],
-    queryFn: () => fetchJson("/api/meals"),
+    queryFn: () => fetchJson("https://hackmitten-3-0-api.mitt.edu.in/api/meals"),
   });
   const meals = mealsData?.meals ?? [];
 
@@ -82,7 +82,7 @@ export function FoodScannerApp() {
     }
     setError(null);
     try {
-      const r = await fetch("/api/food/check-in", {
+      const r = await fetch("https://hackmitten-3-0-api.mitt.edu.in/api/food/check-in", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ qrToken, mealId }),

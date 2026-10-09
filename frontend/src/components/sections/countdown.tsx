@@ -44,7 +44,7 @@ export function Countdown() {
   const { data, isLoading, isError } = useQuery<EventStateResponse>({
     queryKey: ["event-state"],
     queryFn: async () => {
-      const response = await fetch("/api/event-state", {
+      const response = await fetch("https://hackmitten-3-0-api.mitt.edu.in/api/event-state", {
         cache: "no-store",
       });
 

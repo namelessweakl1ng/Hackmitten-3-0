@@ -58,7 +58,7 @@ export function FoodDashboard() {
 
   const { data: statsData, error: statsError } = useQuery<{ meals: MealStat[]; totalApproved: number }>({
     queryKey: ["food-stats"],
-    queryFn: () => fetchJson("/api/food/stats"),
+    queryFn: () => fetchJson("https://hackmitten-3-0-api.mitt.edu.in/api/food/stats"),
     refetchInterval: 10000,
   });
   const meals = statsData?.meals ?? [];
@@ -244,7 +244,7 @@ function ConsumptionView({
 function TeamStatusView() {
   const { data, isLoading, error: queryError } = useQuery<{ teams: TeamStatus[]; meals: { id: string; label: string }[] }>({
     queryKey: ["food-team-status"],
-    queryFn: () => fetchJson("/api/food/team-status"),
+    queryFn: () => fetchJson("https://hackmitten-3-0-api.mitt.edu.in/api/food/team-status"),
     refetchInterval: 15000,
   });
   const teams: TeamStatus[] = data?.teams ?? [];
@@ -337,7 +337,7 @@ function HistoryView() {
     }[];
   }>({
     queryKey: ["food-check-ins-recent"],
-    queryFn: () => fetchJson("/api/food/check-ins?pageSize=30"),
+    queryFn: () => fetchJson("https://hackmitten-3-0-api.mitt.edu.in/api/food/check-ins?pageSize=30"),
     refetchInterval: 10000,
   });
   const checkIns = data?.checkIns ?? [];

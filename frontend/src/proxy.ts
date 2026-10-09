@@ -14,7 +14,7 @@ function requestOrigin(request: NextRequest): string {
 }
 
 export function proxy(request: NextRequest) {
-  if (!request.nextUrl.pathname.startsWith("/api/")) return NextResponse.next();
+  if (!request.nextUrl.pathname.startsWith("https://hackmitten-3-0-api.mitt.edu.in/api/")) return NextResponse.next();
 
   const origin = request.headers.get("origin");
   const sameOrigin = origin === requestOrigin(request);
@@ -44,4 +44,4 @@ export function proxy(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ["/api/:path*"] };
+export const config = { matcher: ["https://hackmitten-3-0-api.mitt.edu.in/api/:path*"] };

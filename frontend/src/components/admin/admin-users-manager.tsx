@@ -26,7 +26,7 @@ export function AdminUsersManager() {
   const qc = useQueryClient();
   const { data, isLoading, error: queryError } = useQuery<{ users: AdminUser[] }>({
     queryKey: ["admin-users"],
-    queryFn: () => fetchJson("/api/admin/users"),
+    queryFn: () => fetchJson("https://hackmitten-3-0-api.mitt.edu.in/api/admin/users"),
   });
   const users: AdminUser[] = data?.users ?? [];
 
@@ -38,7 +38,7 @@ export function AdminUsersManager() {
   const create = async () => {
     setBusy(true); setError(null);
     try {
-      const res = await fetch("/api/admin/users", {
+      const res = await fetch("https://hackmitten-3-0-api.mitt.edu.in/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...draft, name: draft.name || undefined }),

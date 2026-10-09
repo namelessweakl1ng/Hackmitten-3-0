@@ -16,7 +16,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export function SponsorManager() {
   const queryClient = useQueryClient();
   const { data, isLoading, error: queryError } = useQuery<{ sponsors: Sponsor[] }>({
-    queryKey: ["admin-sponsors"], queryFn: () => request("/api/admin/sponsors"),
+    queryKey: ["admin-sponsors"], queryFn: () => request("https://hackmitten-3-0-api.mitt.edu.in/api/admin/sponsors"),
   });
   const [adding, setAdding] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -56,7 +56,7 @@ export function SponsorManager() {
     setBusyId("new"); setError(null); setSuccess(null);
     const body = new FormData();
     body.set("name", name); body.set("websiteUrl", websiteUrl); body.set("tier", tier); body.set("customTier", customTier); body.set("logo", logo);
-    try { await request("/api/admin/sponsors", { method: "POST", body }); await refresh(); reset(); setSuccess(`${name} was added.`); }
+    try { await request("https://hackmitten-3-0-api.mitt.edu.in/api/admin/sponsors", { method: "POST", body }); await refresh(); reset(); setSuccess(`${name} was added.`); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to add sponsor."); }
     finally { setBusyId(null); }
   };
